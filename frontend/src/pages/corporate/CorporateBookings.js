@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, Calendar } from '@phosphor-icons/react';
+import { Plus, Calendar, Upload } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCorporateAuth } from '../../context/CorporateAuthContext';
+import CSVUploader from '../../components/CSVUploader';
 
 const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api/corporate`;
 
@@ -14,6 +15,7 @@ const CorporateBookings = () => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [formData, setFormData] = useState({
     employee_id: '',
     pickup_location: '',
@@ -65,6 +67,42 @@ const CorporateBookings = () => {
     }
   };
 
+  const handleBulkUpload = async (csvData) => {
+    try {
+      const bookingsData = csvData.map(row => {
+        // Find employee by employee_id from CSV
+        const employee = employees.find(e => e.employee_id === row.employee_id);
+        if (!employee) {
+          throw new Error(`Employee ${row.employee_id} not found`);
+        }
+
+        return {
+          employee_id: employee.id,
+          pickup_location: row.pickup_location,
+          dropoff_location: row.dropoff_location,
+          pickup_time: new Date(row.pickup_datetime).toISOString(),
+          cost_center: row.cost_center || undefined,
+          notes: row.notes || undefined
+        };
+      });
+
+      const response = await axios.post(`${API_BASE}/bookings/bulk-create`, bookingsData);
+      
+      if (response.data.created > 0) {
+        toast.success(`${response.data.created} bookings created successfully`);
+      }
+      
+      if (response.data.failed > 0) {
+        toast.warning(`${response.data.failed} bookings failed`);
+      }
+      
+      setShowBulkUpload(false);
+      fetchData();
+    } catch (error) {
+      toast.error(error.message || 'Bulk upload failed');
+    }
+  };
+
   const getStatusBadgeClass = (status) => {
     const classes = {
       PENDING: 'bg-[#E5E5E5] text-[#525252]',
@@ -95,14 +133,24 @@ const CorporateBookings = () => {
           <p className="text-xs text-[#525252] uppercase tracking-widest mt-2">Manage Transportation</p>
         </div>
         {user.role !== 'VIEWER' && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-[#0047FF] text-white px-6 py-3 font-semibold text-sm hover:bg-[#003BCC] transition-colors duration-150"
-            data-testid="create-booking-button"
-          >
-            <Plus size={20} weight="bold" />
-            Create Booking
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowBulkUpload(true)}
+              className="flex items-center gap-2 border-2 border-[#0047FF] text-[#0047FF] px-6 py-3 font-semibold text-sm hover:bg-[#E6EFFF] transition-colors duration-150"
+              data-testid="bulk-upload-bookings-button"
+            >
+              <Upload size={20} weight="bold" />
+              Bulk Upload
+            </button>
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 bg-[#0047FF] text-white px-6 py-3 font-semibold text-sm hover:bg-[#003BCC] transition-colors duration-150"
+              data-testid="create-booking-button"
+            >
+              <Plus size={20} weight="bold" />
+              Create Booking
+            </button>
+          </div>
         )}
       </div>
 
@@ -258,6 +306,31 @@ const CorporateBookings = () => {
               </button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Upload Modal */}
+      <Dialog open={showBulkUpload} onOpenChange={setShowBulkUpload}>
+        <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold tracking-tight">Bulk Upload Bookings</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            <CSVUploader
+              onUpload={handleBulkUpload}
+              templateHeaders={['employee_id', 'pickup_location', 'dropoff_location', 'pickup_datetime', 'cost_center', 'notes']}
+              sampleData={['EMP001', 'Sector 62 Noida', 'Connaught Place Delhi', '2026-03-27T09:00:00', 'ENG-001', 'Client meeting']}
+              title="Upload Bookings CSV"
+            />
+            <div className="mt-4 bg-yellow-50 border border-[#FFB300] p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2">Important Notes</p>
+              <ul className="text-xs text-[#525252] space-y-1">
+                <li>• employee_id should match existing employee IDs in the system</li>
+                <li>• pickup_datetime format: YYYY-MM-DDTHH:MM:SS (e.g., 2026-03-27T09:00:00)</li>
+                <li>• Bookings will automatically create duties in the admin panel</li>
+              </ul>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

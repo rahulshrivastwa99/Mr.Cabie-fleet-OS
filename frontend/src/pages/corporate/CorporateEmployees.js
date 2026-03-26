@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Plus, Users, Upload } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useCorporateAuth } from '../../context/CorporateAuthContext';
+import CSVUploader from '../../components/CSVUploader';
 
 const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api/corporate`;
 
@@ -12,6 +13,7 @@ const CorporateEmployees = () => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -60,6 +62,36 @@ const CorporateEmployees = () => {
     }
   };
 
+  const handleBulkUpload = async (csvData) => {
+    try {
+      const employeesData = csvData.map(row => ({
+        employee_id: row.employee_id,
+        name: row.name,
+        email: row.email,
+        phone: row.phone,
+        department: row.department || undefined,
+        cost_center: row.cost_center || undefined,
+        default_pickup: row.default_pickup || undefined,
+        default_dropoff: row.default_dropoff || undefined
+      }));
+
+      const response = await axios.post(`${API_BASE}/employees/bulk-create`, employeesData);
+      
+      if (response.data.created > 0) {
+        toast.success(`${response.data.created} employees added successfully`);
+      }
+      
+      if (response.data.failed > 0) {
+        toast.warning(`${response.data.failed} employees failed to upload`);
+      }
+      
+      setShowBulkUpload(false);
+      fetchEmployees();
+    } catch (error) {
+      toast.error('Bulk upload failed');
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center h-full">
@@ -82,6 +114,14 @@ const CorporateEmployees = () => {
         </div>
         {canManage && (
           <div className="flex gap-3">
+            <button
+              onClick={() => setShowBulkUpload(true)}
+              className="flex items-center gap-2 border-2 border-[#0047FF] text-[#0047FF] px-6 py-3 font-semibold text-sm hover:bg-[#E6EFFF] transition-colors duration-150"
+              data-testid="bulk-upload-button"
+            >
+              <Upload size={20} weight="bold" />
+              Bulk Upload
+            </button>
             <button
               onClick={() => setShowModal(true)}
               className="flex items-center gap-2 bg-[#0047FF] text-white px-6 py-3 font-semibold text-sm hover:bg-[#003BCC] transition-colors duration-150"
@@ -257,6 +297,23 @@ const CorporateEmployees = () => {
               </button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Upload Modal */}
+      <Dialog open={showBulkUpload} onOpenChange={setShowBulkUpload}>
+        <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold tracking-tight">Bulk Upload Employees</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            <CSVUploader
+              onUpload={handleBulkUpload}
+              templateHeaders={['employee_id', 'name', 'email', 'phone', 'department', 'cost_center', 'default_pickup', 'default_dropoff']}
+              sampleData={['EMP001', 'John Doe', 'john@company.com', '+91 9876543210', 'Engineering', 'ENG-001', 'Home Address', 'Office Address']}
+              title="Upload Employees CSV"
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </div>

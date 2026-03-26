@@ -817,6 +817,31 @@ async def create_booking(booking_data: BookingCreate, current_user: CorporateUse
     doc['pickup_time'] = doc['pickup_time'].isoformat()
     
     await db.bookings.insert_one(doc)
+    
+    # AUTO-CREATE DUTY: When corporate creates booking, automatically create duty in admin panel
+    duty = Duty(
+        client_id=current_user.client_id,
+        pickup_location=booking_data.pickup_location,
+        dropoff_location=booking_data.dropoff_location,
+        pickup_time=booking_data.pickup_time,
+        passenger_name=employee['name'],
+        passenger_phone=employee['phone'],
+        notes=f"Booking ID: {booking.id} | Cost Center: {booking.cost_center or 'N/A'} | {booking_data.notes or ''}"
+    )
+    
+    duty_doc = duty.model_dump()
+    duty_doc['created_at'] = duty_doc['created_at'].isoformat()
+    duty_doc['updated_at'] = duty_doc['updated_at'].isoformat()
+    duty_doc['pickup_time'] = duty_doc['pickup_time'].isoformat()
+    
+    await db.duties.insert_one(duty_doc)
+    
+    # Link duty to booking
+    await db.bookings.update_one(
+        {"id": booking.id},
+        {"$set": {"duty_id": duty.id, "status": BookingStatus.CONFIRMED}}
+    )
+    
     return booking
 
 @api_router.get("/corporate/bookings/{booking_id}", response_model=Booking)
@@ -936,6 +961,133 @@ async def get_trips_report(
             "completed": len([b for b in bookings if b['status'] == BookingStatus.COMPLETED]),
             "cancelled": len([b for b in bookings if b['status'] == BookingStatus.CANCELLED])
         }
+    }
+
+# Bulk Upload Endpoints
+@api_router.post("/corporate/employees/bulk-upload")
+async def bulk_upload_employees(current_user: CorporateUser = Depends(get_current_corporate_user)):
+    """
+    Bulk upload employees from CSV
+    Expected CSV format: employee_id,name,email,phone,department,cost_center,default_pickup,default_dropoff
+    """
+    if current_user.role not in [CorporateUserRole.ADMIN, CorporateUserRole.HR]:
+        raise HTTPException(status_code=403, detail="Only Admin and HR can bulk upload employees")
+    
+    from fastapi import File, UploadFile
+    import csv
+    import io
+    
+    # This endpoint expects file in request, but we'll return the structure for frontend
+    return {"message": "Upload CSV with format: employee_id,name,email,phone,department,cost_center,default_pickup,default_dropoff"}
+
+@api_router.post("/corporate/employees/bulk-create")
+async def bulk_create_employees(employees_data: List[EmployeeCreate], current_user: CorporateUser = Depends(get_current_corporate_user)):
+    """
+    Create multiple employees at once
+    """
+    if current_user.role not in [CorporateUserRole.ADMIN, CorporateUserRole.HR]:
+        raise HTTPException(status_code=403, detail="Only Admin and HR can bulk create employees")
+    
+    created_employees = []
+    errors = []
+    
+    for idx, emp_data in enumerate(employees_data):
+        try:
+            employee = Employee(
+                client_id=current_user.client_id,
+                **emp_data.model_dump()
+            )
+            
+            doc = employee.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            
+            await db.employees.insert_one(doc)
+            created_employees.append(employee)
+        except Exception as e:
+            errors.append({"row": idx + 1, "error": str(e)})
+    
+    return {
+        "created": len(created_employees),
+        "failed": len(errors),
+        "errors": errors
+    }
+
+@api_router.post("/corporate/bookings/bulk-create")
+async def bulk_create_bookings(bookings_data: List[BookingCreate], current_user: CorporateUser = Depends(get_current_corporate_user)):
+    """
+    Create multiple bookings at once
+    """
+    if current_user.role == CorporateUserRole.VIEWER:
+        raise HTTPException(status_code=403, detail="Viewers cannot create bookings")
+    
+    created_bookings = []
+    errors = []
+    
+    for idx, booking_data in enumerate(bookings_data):
+        try:
+            # Verify employee exists
+            employee = await db.employees.find_one({
+                "id": booking_data.employee_id,
+                "client_id": current_user.client_id
+            }, {"_id": 0})
+            
+            if not employee:
+                errors.append({"row": idx + 1, "error": f"Employee {booking_data.employee_id} not found"})
+                continue
+            
+            booking = Booking(
+                client_id=current_user.client_id,
+                employee_id=booking_data.employee_id,
+                booking_type=booking_data.booking_type,
+                pickup_location=booking_data.pickup_location,
+                dropoff_location=booking_data.dropoff_location,
+                pickup_time=booking_data.pickup_time,
+                passenger_name=employee['name'],
+                passenger_phone=employee['phone'],
+                cost_center=booking_data.cost_center or employee.get('cost_center'),
+                notes=booking_data.notes,
+                created_by=current_user.id
+            )
+            
+            doc = booking.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            doc['updated_at'] = doc['updated_at'].isoformat()
+            doc['pickup_time'] = doc['pickup_time'].isoformat()
+            
+            await db.bookings.insert_one(doc)
+            
+            # Auto-create duty
+            duty = Duty(
+                client_id=current_user.client_id,
+                pickup_location=booking_data.pickup_location,
+                dropoff_location=booking_data.dropoff_location,
+                pickup_time=booking_data.pickup_time,
+                passenger_name=employee['name'],
+                passenger_phone=employee['phone'],
+                notes=f"Booking ID: {booking.id} | Cost Center: {booking.cost_center or 'N/A'}"
+            )
+            
+            duty_doc = duty.model_dump()
+            duty_doc['created_at'] = duty_doc['created_at'].isoformat()
+            duty_doc['updated_at'] = duty_doc['updated_at'].isoformat()
+            duty_doc['pickup_time'] = duty_doc['pickup_time'].isoformat()
+            
+            await db.duties.insert_one(duty_doc)
+            
+            # Link duty to booking
+            await db.bookings.update_one(
+                {"id": booking.id},
+                {"$set": {"duty_id": duty.id, "status": BookingStatus.CONFIRMED}}
+            )
+            
+            created_bookings.append(booking)
+        except Exception as e:
+            errors.append({"row": idx + 1, "error": str(e)})
+    
+    return {
+        "created": len(created_bookings),
+        "failed": len(errors),
+        "errors": errors
     }
 
 # Include router
