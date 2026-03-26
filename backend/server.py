@@ -84,6 +84,30 @@ class BookingType(str, Enum):
     ONE_TIME = "ONE_TIME"
     RECURRING = "RECURRING"
 
+
+class TripType(str, Enum):
+    ONE_WAY = "ONE_WAY"
+    ROUND_TRIP = "ROUND_TRIP"
+
+class RecurringType(str, Enum):
+    DAILY = "DAILY"
+    WEEKLY = "WEEKLY"
+    MONTHLY = "MONTHLY"
+
+class PricingType(str, Enum):
+    PER_KM = "PER_KM"  # Rate per KM with minimum KM
+    TIME_BASED = "TIME_BASED"  # 8hr/80km packages
+    ROUTE_BASED = "ROUTE_BASED"  # Fixed route pricing
+    DAILY_RENTAL = "DAILY_RENTAL"  # Daily fixed rate
+    CUSTOM = "CUSTOM"  # Custom pricing structure
+
+class ServiceType(str, Enum):
+    AIRPORT_TRANSFER = "AIRPORT_TRANSFER"
+    LOCAL_DUTY = "LOCAL_DUTY"
+    OUTSTATION = "OUTSTATION"
+    EMPLOYEE_TRANSPORT = "EMPLOYEE_TRANSPORT"
+    CUSTOM = "CUSTOM"
+
 # Models
 class User(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -198,6 +222,7 @@ class Invoice(BaseModel):
     invoice_number: str
     client_id: str
     duties: List[str]  # List of duty IDs
+    line_items: List[dict] = []  # List of InvoiceLineItem dicts
     amount: float
     gst_amount: float
     total_amount: float
@@ -209,6 +234,7 @@ class Invoice(BaseModel):
 class InvoiceCreate(BaseModel):
     client_id: str
     duties: List[str]
+    line_items: Optional[List[dict]] = []  # Will be InvoiceLineItemCreate dicts
     amount: float
     gst_percentage: float = 18.0
     due_days: int = 30
@@ -278,11 +304,32 @@ class Booking(BaseModel):
     employee_id: str
     booking_type: BookingType = BookingType.ONE_TIME
     status: BookingStatus = BookingStatus.PENDING
+    
+    # Trip Details
+    trip_type: TripType = TripType.ONE_WAY
     pickup_location: str
     dropoff_location: str
     pickup_time: datetime
+    return_time: Optional[datetime] = None  # For round trips
+    
+    # Passenger Details
     passenger_name: str
     passenger_phone: str
+    passengers: List[str] = []  # Multi-employee booking (employee IDs)
+    
+    # Recurring Booking
+    recurring_type: Optional[RecurringType] = None
+    recurring_days: List[int] = []  # [1,2,3,4,5] for Mon-Fri
+    recurring_end_date: Optional[datetime] = None
+    
+    # Vehicle & Service
+    vehicle_type_requested: Optional[VehicleType] = None
+    service_type: Optional[ServiceType] = None
+    
+    # Pricing
+    estimated_cost: Optional[float] = None
+    pricing_rule_applied: Optional[str] = None  # PricingRule ID
+    
     cost_center: Optional[str] = None
     notes: Optional[str] = None
     duty_id: Optional[str] = None  # Linked duty created by admin
@@ -295,9 +342,17 @@ class Booking(BaseModel):
 class BookingCreate(BaseModel):
     employee_id: str
     booking_type: BookingType = BookingType.ONE_TIME
+    trip_type: TripType = TripType.ONE_WAY
     pickup_location: str
     dropoff_location: str
     pickup_time: datetime
+    return_time: Optional[datetime] = None
+    passengers: Optional[List[str]] = []  # Additional employee IDs
+    recurring_type: Optional[RecurringType] = None
+    recurring_days: Optional[List[int]] = []
+    recurring_end_date: Optional[datetime] = None
+    vehicle_type_requested: Optional[VehicleType] = None
+    service_type: Optional[ServiceType] = None
     cost_center: Optional[str] = None
     notes: Optional[str] = None
 
@@ -308,6 +363,133 @@ class CorporateDashboardStats(BaseModel):
     total_employees: int
     monthly_cost: float
     this_month_trips: int
+
+# ==================== PRICING ENGINE MODELS ====================
+
+class Service(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    service_type: ServiceType
+    description: Optional[str] = None
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ServiceCreate(BaseModel):
+    name: str
+    service_type: ServiceType
+    description: Optional[str] = None
+
+class PricingRule(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    pricing_type: PricingType
+    vehicle_type: VehicleType
+    
+    # Per KM Pricing
+    rate_per_km: Optional[float] = None
+    minimum_km: Optional[float] = None
+    extra_km_charge: Optional[float] = None
+    
+    # Time-Based Package
+    package_hours: Optional[float] = None
+    package_km: Optional[float] = None
+    base_fare: Optional[float] = None
+    extra_hour_charge: Optional[float] = None
+    extra_km_charge_package: Optional[float] = None
+    
+    # Route-Based
+    route_from: Optional[str] = None
+    route_to: Optional[str] = None
+    one_way_price: Optional[float] = None
+    round_trip_price: Optional[float] = None
+    
+    # Daily Rental
+    daily_rate: Optional[float] = None
+    included_km: Optional[float] = None
+    included_hours: Optional[float] = None
+    
+    # Custom
+    custom_logic: Optional[dict] = None
+    
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class PricingRuleCreate(BaseModel):
+    pricing_type: PricingType
+    vehicle_type: VehicleType
+    rate_per_km: Optional[float] = None
+    minimum_km: Optional[float] = None
+    extra_km_charge: Optional[float] = None
+    package_hours: Optional[float] = None
+    package_km: Optional[float] = None
+    base_fare: Optional[float] = None
+    extra_hour_charge: Optional[float] = None
+    extra_km_charge_package: Optional[float] = None
+    route_from: Optional[str] = None
+    route_to: Optional[str] = None
+    one_way_price: Optional[float] = None
+    round_trip_price: Optional[float] = None
+    daily_rate: Optional[float] = None
+    included_km: Optional[float] = None
+    included_hours: Optional[float] = None
+    custom_logic: Optional[dict] = None
+
+class AdditionalCharge(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    charge_type: str  # waiting, night, driver_allowance, toll, parking, state_tax, fuel_adjustment
+    rate: float
+    unit: str  # per_hour, per_day, fixed, percentage
+    description: Optional[str] = None
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class AdditionalChargeCreate(BaseModel):
+    name: str
+    charge_type: str
+    rate: float
+    unit: str
+    description: Optional[str] = None
+
+class RateCard(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    client_id: str
+    name: str
+    is_active: bool = True
+    pricing_rules: List[str] = []  # List of PricingRule IDs
+    additional_charges: List[str] = []  # List of AdditionalCharge IDs
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class RateCardCreate(BaseModel):
+    client_id: str
+    name: str
+    pricing_rules: Optional[List[str]] = []
+    additional_charges: Optional[List[str]] = []
+
+class InvoiceLineItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    service_type: ServiceType
+    service_name: str
+    vehicle_type: Optional[VehicleType] = None
+    pricing_type: Optional[PricingType] = None
+    base_fare: float
+    additional_charges: List[dict] = []  # [{name, amount}]
+    total_amount: float
+    description: Optional[str] = None
+
+class InvoiceLineItemCreate(BaseModel):
+    service_type: ServiceType
+    service_name: str
+    vehicle_type: Optional[VehicleType] = None
+    pricing_type: Optional[PricingType] = None
+    base_fare: float
+    additional_charges: Optional[List[dict]] = []
+    description: Optional[str] = None
+
 
 # Helper functions
 def verify_password(plain_password, hashed_password):
@@ -630,6 +812,184 @@ async def create_invoice(invoice_data: InvoiceCreate, current_user: User = Depen
     )
     
     return invoice
+
+
+
+# ==================== PRICING ENGINE API ENDPOINTS ====================
+
+# Services Management
+@api_router.get("/services", response_model=List[Service])
+async def get_services(current_user: User = Depends(get_current_user)):
+    services = await db.services.find({}, {"_id": 0}).to_list(1000)
+    for s in services:
+        s['created_at'] = datetime.fromisoformat(s['created_at']) if isinstance(s['created_at'], str) else s['created_at']
+    return services
+
+@api_router.post("/services", response_model=Service)
+async def create_service(service_data: ServiceCreate, current_user: User = Depends(get_current_user)):
+    service = Service(**service_data.model_dump())
+    doc = service.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.services.insert_one(doc)
+    return service
+
+# Pricing Rules Management
+@api_router.get("/pricing-rules", response_model=List[PricingRule])
+async def get_pricing_rules(current_user: User = Depends(get_current_user)):
+    rules = await db.pricing_rules.find({}, {"_id": 0}).to_list(1000)
+    for r in rules:
+        r['created_at'] = datetime.fromisoformat(r['created_at']) if isinstance(r['created_at'], str) else r['created_at']
+    return rules
+
+@api_router.post("/pricing-rules", response_model=PricingRule)
+async def create_pricing_rule(rule_data: PricingRuleCreate, current_user: User = Depends(get_current_user)):
+    rule = PricingRule(**rule_data.model_dump())
+    doc = rule.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.pricing_rules.insert_one(doc)
+    return rule
+
+# Additional Charges Management
+@api_router.get("/additional-charges", response_model=List[AdditionalCharge])
+async def get_additional_charges(current_user: User = Depends(get_current_user)):
+    charges = await db.additional_charges.find({}, {"_id": 0}).to_list(1000)
+    for c in charges:
+        c['created_at'] = datetime.fromisoformat(c['created_at']) if isinstance(c['created_at'], str) else c['created_at']
+    return charges
+
+@api_router.post("/additional-charges", response_model=AdditionalCharge)
+async def create_additional_charge(charge_data: AdditionalChargeCreate, current_user: User = Depends(get_current_user)):
+    charge = AdditionalCharge(**charge_data.model_dump())
+    doc = charge.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.additional_charges.insert_one(doc)
+    return charge
+
+# Rate Cards Management
+@api_router.get("/rate-cards", response_model=List[RateCard])
+async def get_rate_cards(current_user: User = Depends(get_current_user)):
+    rate_cards = await db.rate_cards.find({}, {"_id": 0}).to_list(1000)
+    for rc in rate_cards:
+        rc['created_at'] = datetime.fromisoformat(rc['created_at']) if isinstance(rc['created_at'], str) else rc['created_at']
+        rc['updated_at'] = datetime.fromisoformat(rc['updated_at']) if isinstance(rc['updated_at'], str) else rc['updated_at']
+    return rate_cards
+
+@api_router.post("/rate-cards", response_model=RateCard)
+async def create_rate_card(rate_card_data: RateCardCreate, current_user: User = Depends(get_current_user)):
+    rate_card = RateCard(**rate_card_data.model_dump())
+    doc = rate_card.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    await db.rate_cards.insert_one(doc)
+    return rate_card
+
+@api_router.get("/rate-cards/client/{client_id}", response_model=RateCard)
+async def get_client_rate_card(client_id: str, current_user: User = Depends(get_current_user)):
+    rate_card = await db.rate_cards.find_one({"client_id": client_id, "is_active": True}, {"_id": 0})
+    if not rate_card:
+        raise HTTPException(status_code=404, detail="Rate card not found for this client")
+    rate_card['created_at'] = datetime.fromisoformat(rate_card['created_at'])
+    rate_card['updated_at'] = datetime.fromisoformat(rate_card['updated_at'])
+    return RateCard(**rate_card)
+
+# Pricing Calculator
+@api_router.post("/calculate-pricing")
+async def calculate_pricing(
+    client_id: str,
+    pickup: str,
+    dropoff: str,
+    vehicle_type: VehicleType,
+    trip_type: TripType,
+    distance_km: Optional[float] = None,
+    duration_hours: Optional[float] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Calculate pricing based on client's rate card and trip details
+    """
+    # Get client's rate card
+    rate_card = await db.rate_cards.find_one({"client_id": client_id, "is_active": True}, {"_id": 0})
+    if not rate_card:
+        return {"error": "No rate card found for client", "estimated_cost": 0}
+    
+    # Get pricing rules
+    pricing_rules = []
+    for rule_id in rate_card.get('pricing_rules', []):
+        rule = await db.pricing_rules.find_one({"id": rule_id}, {"_id": 0})
+        if rule and rule['vehicle_type'] == vehicle_type:
+            pricing_rules.append(rule)
+    
+    if not pricing_rules:
+        return {"error": "No pricing rules found", "estimated_cost": 0}
+    
+    # Try route-based pricing first
+    for rule in pricing_rules:
+        if rule['pricing_type'] == PricingType.ROUTE_BASED:
+            if rule.get('route_from') and rule.get('route_to'):
+                if (pickup.lower() in rule['route_from'].lower() and dropoff.lower() in rule['route_to'].lower()):
+                    if trip_type == TripType.ROUND_TRIP and rule.get('round_trip_price'):
+                        return {
+                            "estimated_cost": rule['round_trip_price'],
+                            "pricing_type": "ROUTE_BASED",
+                            "breakdown": {
+                                "base_fare": rule['round_trip_price'],
+                                "trip_type": "Round Trip"
+                            }
+                        }
+                    elif rule.get('one_way_price'):
+                        return {
+                            "estimated_cost": rule['one_way_price'],
+                            "pricing_type": "ROUTE_BASED",
+                            "breakdown": {
+                                "base_fare": rule['one_way_price'],
+                                "trip_type": "One Way"
+                            }
+                        }
+    
+    # Try time-based package
+    for rule in pricing_rules:
+        if rule['pricing_type'] == PricingType.TIME_BASED:
+            if rule.get('base_fare') and duration_hours and distance_km:
+                base_fare = rule['base_fare']
+                extra_charges = 0
+                
+                if duration_hours > rule.get('package_hours', 0):
+                    extra_hours = duration_hours - rule['package_hours']
+                    extra_charges += extra_hours * rule.get('extra_hour_charge', 0)
+                
+                if distance_km > rule.get('package_km', 0):
+                    extra_km = distance_km - rule['package_km']
+                    extra_charges += extra_km * rule.get('extra_km_charge_package', 0)
+                
+                return {
+                    "estimated_cost": base_fare + extra_charges,
+                    "pricing_type": "TIME_BASED",
+                    "breakdown": {
+                        "base_fare": base_fare,
+                        "extra_charges": extra_charges,
+                        "package": f"{rule.get('package_hours')}hr/{rule.get('package_km')}km"
+                    }
+                }
+    
+    # Fallback to per KM pricing
+    for rule in pricing_rules:
+        if rule['pricing_type'] == PricingType.PER_KM:
+            if distance_km and rule.get('rate_per_km'):
+                min_km = rule.get('minimum_km', 0)
+                billable_km = max(distance_km, min_km)
+                cost = billable_km * rule['rate_per_km']
+                
+                return {
+                    "estimated_cost": cost,
+                    "pricing_type": "PER_KM",
+                    "breakdown": {
+                        "rate_per_km": rule['rate_per_km'],
+                        "km_charged": billable_km,
+                        "minimum_km": min_km
+                    }
+                }
+    
+    return {"error": "No applicable pricing found", "estimated_cost": 0}
 
 
 # ==================== CORPORATE CUSTOMER API ENDPOINTS ====================
