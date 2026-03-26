@@ -20,6 +20,10 @@ import CorporateLayout from './components/CorporateLayout';
 import CorporateLogin from './pages/corporate/CorporateLogin';
 import CorporateDashboard from './pages/corporate/CorporateDashboard';
 import CorporateBookings from './pages/corporate/CorporateBookings';
+import CorporateEmployees from './pages/corporate/CorporateEmployees';
+import CorporateTracking from './pages/corporate/CorporateTracking';
+import CorporateInvoices from './pages/corporate/CorporateInvoices';
+import CorporateReports from './pages/corporate/CorporateReports';
 
 import './App.css';
 
@@ -46,6 +50,10 @@ function App() {
             <Route path="/corporate" element={<CorporateProtectedRoute><CorporateLayout /></CorporateProtectedRoute>}>
               <Route index element={<CorporateDashboard />} />
               <Route path="bookings" element={<CorporateBookings />} />
+              <Route path="employees" element={<CorporateEmployees />} />
+              <Route path="tracking" element={<CorporateTracking />} />
+              <Route path="invoices" element={<CorporateInvoices />} />
+              <Route path="reports" element={<CorporateReports />} />
             </Route>
           </Routes>
           <Toaster position="top-right" richColors />
