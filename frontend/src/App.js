@@ -12,27 +12,46 @@ import ClientManagement from './pages/ClientManagement';
 import Layout from './components/Layout';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+
+// Corporate Dashboard Imports
+import { CorporateAuthProvider } from './context/CorporateAuthContext';
+import CorporateProtectedRoute from './components/CorporateProtectedRoute';
+import CorporateLayout from './components/CorporateLayout';
+import CorporateLogin from './pages/corporate/CorporateLogin';
+import CorporateDashboard from './pages/corporate/CorporateDashboard';
+import CorporateBookings from './pages/corporate/CorporateBookings';
+
 import './App.css';
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route index element={<Dashboard />} />
-            <Route path="fleet" element={<FleetManagement />} />
-            <Route path="drivers" element={<DriverManagement />} />
-            <Route path="duties" element={<DutyManagement />} />
-            <Route path="tracking" element={<LiveTracking />} />
-            <Route path="billing" element={<Billing />} />
-            <Route path="clients" element={<ClientManagement />} />
-          </Route>
-        </Routes>
-        <Toaster position="top-right" richColors />
-      </BrowserRouter>
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <CorporateAuthProvider>
+          <Routes>
+            {/* Admin Panel Routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+              <Route index element={<Dashboard />} />
+              <Route path="fleet" element={<FleetManagement />} />
+              <Route path="drivers" element={<DriverManagement />} />
+              <Route path="duties" element={<DutyManagement />} />
+              <Route path="tracking" element={<LiveTracking />} />
+              <Route path="billing" element={<Billing />} />
+              <Route path="clients" element={<ClientManagement />} />
+            </Route>
+
+            {/* Corporate Portal Routes */}
+            <Route path="/corporate/login" element={<CorporateLogin />} />
+            <Route path="/corporate" element={<CorporateProtectedRoute><CorporateLayout /></CorporateProtectedRoute>}>
+              <Route index element={<CorporateDashboard />} />
+              <Route path="bookings" element={<CorporateBookings />} />
+            </Route>
+          </Routes>
+          <Toaster position="top-right" richColors />
+        </CorporateAuthProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 
