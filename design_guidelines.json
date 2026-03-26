@@ -1,0 +1,103 @@
+{
+  "theme_and_archetype": {
+    "theme": "LIGHT",
+    "archetype": "4 (Swiss & High-Contrast)",
+    "description": "Authority, clarity, function-first. Optimized for operations, high data density, and fast decision making.",
+    "emotional_tone": "Utilitarian, precise, reliable, commanding. A 'Control Room' for fleet managers."
+  },
+  "typography": {
+    "font_family_heading": "Chivo",
+    "font_family_body": "IBM Plex Sans",
+    "hierarchy": {
+      "h1": "text-3xl sm:text-4xl tracking-tight font-bold",
+      "h2": "text-xl sm:text-2xl tracking-tight font-semibold",
+      "h3": "text-lg sm:text-xl font-medium",
+      "body": "text-sm leading-relaxed",
+      "labels": "text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500"
+    },
+    "guidelines": "Do not use 'Inter'. Headlines MUST have tight letter spacing. Overlines/labels must be uppercase with wide tracking."
+  },
+  "color_palette": {
+    "background": "#FAFAFA",
+    "surface": "#FFFFFF",
+    "border": "#E5E5E5",
+    "text_primary": "#0A0A0A",
+    "text_secondary": "#525252",
+    "primary_action": "#0047FF",
+    "primary_action_hover": "#003BCC",
+    "status_colors": {
+      "created": "#525252",
+      "assigned": "#0047FF",
+      "accepted": "#FFB300",
+      "started": "#00C853",
+      "completed": "#0A0A0A",
+      "billed": "#E00000"
+    }
+  },
+  "layout_and_spacing": {
+    "grid_system": "Control Room Grid (Base: grid-cols-1 md:grid-cols-3 lg:grid-cols-4)",
+    "gap": "gap-4 or gap-6 for tight data correlation",
+    "padding": "Generous inside containers: p-4 or p-6",
+    "border_radius": "rounded-sm (Max 2px to 4px). Avoid rounded-lg or full.",
+    "alignment": "Left-align dense content, forms, and data. Center-align only for empty states."
+  },
+  "surface_strategy": {
+    "style": "Grid Borders (The Technical Look)",
+    "description": "Expose the skeleton. Flat backgrounds, 1px subtle borders (border-neutral-200), NO drop shadows for cards. Use border-collapse style layouts for feature grids where appropriate."
+  },
+  "components": {
+    "cards": "Flat white background, border-neutral-200, no shadow. Hover state: subtle border color darken.",
+    "buttons": "Sharp corners (rounded-sm), high contrast. Primary: bg-[#0047FF] text-white. Secondary: bg-transparent border border-neutral-300 text-neutral-900.",
+    "tables": "High density, text-sm, 1px border-b on rows, no vertical borders. Status badges use stark background with contrasting text.",
+    "forms": "Shadcn standard but customized to zero/sm radius. Minimal padding. Use Shadcn components for Select, Input, Datepicker.",
+    "navigation": "Solid white sidebar or top nav with hard bottom/right border. Active states marked with #0047FF left/bottom border."
+  },
+  "motion": {
+    "philosophy": "Minimalist micro-interactions for feedback. No bouncy or distracting animations.",
+    "transitions": "transition-colors duration-150 ease-in-out for buttons, table rows, and interactive elements."
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "style": "Regular or Bold weights. Avoid Duotone for this Swiss Brutalism archetype to maintain sharpness."
+  },
+  "image_urls": [
+    {
+      "category": "driver_avatar_1",
+      "url": "https://images.pexels.com/photos/5835456/pexels-photo-5835456.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Professional driver on phone, for driver profile or roster."
+    },
+    {
+      "category": "driver_avatar_2",
+      "url": "https://images.pexels.com/photos/5835591/pexels-photo-5835591.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Professional driver in cab, for driver profile."
+    },
+    {
+      "category": "vehicle_thumbnail_1",
+      "url": "https://images.pexels.com/photos/4620555/pexels-photo-4620555.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "White delivery vans, representing fleet."
+    },
+    {
+      "category": "vehicle_thumbnail_2",
+      "url": "https://images.pexels.com/photos/33623774/pexels-photo-33623774.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Silver commercial fleet trucks."
+    },
+    {
+      "category": "map_placeholder",
+      "url": "https://images.pexels.com/photos/443422/pexels-photo-443422.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Satellite view of roads for map tracking background or duty tracking."
+    }
+  ],
+  "accessibility": {
+    "contrast": "Strict adherence to 4.5:1 ratio. Text colors must be explicitly defined on hover.",
+    "focus_states": "focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2",
+    "testing": "All interactive elements MUST include data-testid attribute (e.g., data-testid='create-duty-button')."
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the color palette. DO NOT USE 'Inter', 'Roboto', or generic fonts for headings.",
+    "Do NOT use drop shadows anywhere except for overlays (modals/dropdowns). Keep cards completely flat with 1px borders.",
+    "Prioritize data density. Dashboards should show a lot of data at a glance without feeling cluttered.",
+    "Use Phosphor icons (@phosphor-icons/react). Make sure tables and charts use pure HTML+Tailwind or highly customized Shadcn without the default rounded Vercel-look.",
+    "Build the core Duty/Trip Management lifecycle (Created -> Assigned -> Accepted -> Started -> Completed -> Billed -> Closed) as the central focus.",
+    "Ensure all interactive elements have a descriptive data-testid."
+  ]
+}
