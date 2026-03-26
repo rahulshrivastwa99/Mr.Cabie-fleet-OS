@@ -1,0 +1,154 @@
+{
+  "summary": {
+    "tests_run": 29,
+    "tests_passed": 29,
+    "success_rate": 100.0
+  },
+  "results": [
+    {
+      "test": "Login with demo credentials",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Token extraction",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get current user",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "User data validation",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get dashboard stats",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Dashboard stats structure",
+      "success": true,
+      "details": "Missing fields: []"
+    },
+    {
+      "test": "Get all vehicles",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create vehicle",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get specific vehicle",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update vehicle",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get all drivers",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create driver",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get specific driver",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get all clients",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create client",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get clients for duty",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get vehicles for duty",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get drivers for duty",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Create duty (CREATED status)",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Assign duty (CREATED \u2192 ASSIGNED)",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update duty status (ASSIGNED \u2192 ACCEPTED)",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update duty status (ACCEPTED \u2192 STARTED)",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Update duty status (STARTED \u2192 COMPLETED)",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get duty after completion",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Duty status verification",
+      "success": true,
+      "details": ""
+    },
+    {
+      "test": "Get all invoices",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get duties for billing",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Get clients for billing",
+      "success": true,
+      "details": "Status: 200"
+    },
+    {
+      "test": "Generate invoice",
+      "success": true,
+      "details": "Status: 200"
+    }
+  ]
+}

@@ -1,34 +1,72 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@400;600;700;900&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: #FAFAFA;
+  color: #0A0A0A;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Chivo', sans-serif;
 }
 
-.App-link {
-    color: #61dafb;
+.primary-btn {
+  background: #0047FF;
+  color: white;
+  transition: background-color 150ms ease-in-out;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.primary-btn:hover {
+  background: #003BCC;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-created {
+  background: #E5E5E5;
+  color: #525252;
+}
+
+.status-assigned {
+  background: #E6EFFF;
+  color: #0047FF;
+}
+
+.status-accepted {
+  background: #FFF4E0;
+  color: #FFB300;
+}
+
+.status-started {
+  background: #E0F7E9;
+  color: #00C853;
+}
+
+.status-completed {
+  background: #F5F5F5;
+  color: #0A0A0A;
+}
+
+.status-billed {
+  background: #FFE5E5;
+  color: #E00000;
+}
+
+.card-flat {
+  background: white;
+  border: 1px solid #E5E5E5;
+  border-radius: 2px;
 }
