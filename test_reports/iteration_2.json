@@ -1,0 +1,88 @@
+{
+  "summary": "Completed comprehensive testing of Fleet OS Pricing Engine and Corporate Booking upgrades. All 22 backend API tests passed (100%). Frontend UI testing verified all new features are working correctly including Services Management, Pricing Rules, Rate Cards, and upgraded Corporate Booking form with trip type, recurring options, vehicle selection, multi-employee booking, and pricing estimate display.",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  
+  "passed_tests": [
+    "Admin Authentication - Login with admin@fleetOS.com",
+    "Services Management - GET /api/services (list services)",
+    "Services Management - POST /api/services (create service)",
+    "Pricing Rules - GET /api/pricing-rules (list rules)",
+    "Pricing Rules - POST /api/pricing-rules (Per KM pricing)",
+    "Pricing Rules - POST /api/pricing-rules (Time-Based pricing)",
+    "Pricing Rules - POST /api/pricing-rules (Route-Based pricing)",
+    "Pricing Rules - POST /api/pricing-rules (Daily Rental pricing)",
+    "Rate Cards - GET /api/rate-cards (list rate cards)",
+    "Rate Cards - GET /api/clients (list clients)",
+    "Rate Cards - POST /api/rate-cards (create rate card with pricing rules)",
+    "Corporate Authentication - Login with hr@techcorp.in",
+    "Corporate Employees - GET /api/corporate/employees",
+    "Corporate Bookings - GET /api/corporate/bookings",
+    "Corporate Bookings - POST /api/corporate/bookings (One-Way booking)",
+    "Corporate Bookings - POST /api/corporate/bookings (Round-Trip booking with return_time)",
+    "Corporate Bookings - POST /api/corporate/bookings (Recurring booking - Weekly)",
+    "Corporate Bookings - POST /api/corporate/bookings (Multi-employee booking)",
+    "Pricing Estimate - POST /api/corporate/estimate-pricing (with vehicle type)",
+    "Pricing Estimate - POST /api/corporate/estimate-pricing (round trip)",
+    "Pricing Estimate - POST /api/corporate/estimate-pricing (without vehicle - returns message)",
+    "Corporate Dashboard - GET /api/corporate/dashboard/stats",
+    "Admin UI - Services Management page loads with Add Service modal",
+    "Admin UI - Pricing Rules page displays all pricing types (Per KM, Time-Based, Route-Based, Daily Rental)",
+    "Admin UI - Rate Cards page shows client-specific rate cards",
+    "Corporate UI - Dashboard shows stats (Total Bookings, Active Trips, Employees, Monthly Cost)",
+    "Corporate UI - Bookings page displays bookings with new fields (Trip Type, Vehicle, Service, Passengers, Est. Cost)",
+    "Corporate UI - Create Booking modal has all new fields (Trip Type, Service Type, Vehicle Preference, Recurring options, Multi-employee selection)"
+  ],
+  
+  "test_report_links": [
+    "/app/backend/tests/test_pricing_and_bookings.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  
+  "action_items": [],
+  
+  "critical_code_review_comments": [],
+  
+  "updated_files": [
+    "/app/backend/tests/test_pricing_and_bookings.py"
+  ],
+  
+  "success_rate": {
+    "backend": "100% (22/22 tests passed)",
+    "frontend": "100% (All UI components working)"
+  },
+  
+  "seed_data_creation": "Created test services, pricing rules (Per KM, Time-Based, Route-Based, Daily Rental), rate cards, and bookings (one-way, round-trip, recurring, multi-employee) during testing",
+  
+  "retest_needed": false,
+  
+  "should_main_agent_self_test": true,
+  
+  "context_for_next_testing_agent": "All Pricing Engine features (Services, Pricing Rules, Rate Cards) and Corporate Booking upgrades (Trip Type, Recurring, Vehicle Selection, Multi-Employee, Pricing Estimate) are fully functional. Backend APIs return correct data. Frontend UI displays all new fields correctly. Pricing estimate API returns correct values (e.g., ₹1390 for Time-Based 8hr/80km package for Delhi-Gurugram route). Existing test data includes pricing rules for SEDAN (Per KM at ₹12.5/km, Time-Based at 8hr/80km for ₹1390, Route-Based Delhi→Gurugram at ₹800/₹1400) and rate card '2026 rates' for Tech Corp India.",
+  
+  "features_verified": {
+    "admin_pricing_engine": {
+      "services_page": "Working - CRUD operations functional, displays service types (AIRPORT_TRANSFER, OUTSTATION, etc.)",
+      "pricing_rules_page": "Working - All pricing types displayed (PER_KM, TIME_BASED, ROUTE_BASED, DAILY_RENTAL)",
+      "rate_cards_page": "Working - Client-specific rate cards with pricing rules"
+    },
+    "corporate_booking_form": {
+      "trip_type_selection": "Working - One Way / Round Trip options",
+      "return_time_field": "Working - Appears when Round Trip selected",
+      "vehicle_preference": "Working - Dropdown with SEDAN, SUV, HATCHBACK, EV, LUXURY",
+      "service_type": "Working - Dropdown with AIRPORT_TRANSFER, LOCAL_DUTY, OUTSTATION, EMPLOYEE_TRANSPORT, CUSTOM",
+      "recurring_booking": "Working - Daily/Weekly/Monthly options with weekday selection for Weekly",
+      "multi_employee_booking": "Working - Checkbox selection for additional passengers",
+      "pricing_estimate_api": "Working - Returns estimated cost based on rate card and pricing rules"
+    }
+  }
+}

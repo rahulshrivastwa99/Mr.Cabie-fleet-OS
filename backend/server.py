@@ -1157,15 +1157,73 @@ async def create_booking(booking_data: BookingCreate, current_user: CorporateUse
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
     
+    # Calculate estimated pricing
+    estimated_cost = None
+    pricing_rule_applied = None
+    
+    # Try to find rate card and calculate pricing
+    rate_card = await db.rate_cards.find_one({"client_id": current_user.client_id, "is_active": True}, {"_id": 0})
+    if rate_card and booking_data.vehicle_type_requested:
+        # Get pricing rules
+        for rule_id in rate_card.get('pricing_rules', []):
+            rule = await db.pricing_rules.find_one({"id": rule_id}, {"_id": 0})
+            if rule and rule['vehicle_type'] == booking_data.vehicle_type_requested:
+                # Try route-based pricing first
+                if rule['pricing_type'] == PricingType.ROUTE_BASED:
+                    pickup_lower = booking_data.pickup_location.lower()
+                    dropoff_lower = booking_data.dropoff_location.lower()
+                    route_from = (rule.get('route_from') or '').lower()
+                    route_to = (rule.get('route_to') or '').lower()
+                    
+                    if route_from and route_to and (route_from in pickup_lower or pickup_lower in route_from) and (route_to in dropoff_lower or dropoff_lower in route_to):
+                        if booking_data.trip_type == TripType.ROUND_TRIP and rule.get('round_trip_price'):
+                            estimated_cost = rule['round_trip_price']
+                            pricing_rule_applied = rule_id
+                            break
+                        elif rule.get('one_way_price'):
+                            estimated_cost = rule['one_way_price']
+                            pricing_rule_applied = rule_id
+                            break
+                
+                # Try time-based package
+                elif rule['pricing_type'] == PricingType.TIME_BASED:
+                    if rule.get('base_fare'):
+                        estimated_cost = rule['base_fare']
+                        pricing_rule_applied = rule_id
+                        break
+                
+                # Try per KM pricing
+                elif rule['pricing_type'] == PricingType.PER_KM:
+                    if rule.get('rate_per_km'):
+                        min_km = rule.get('minimum_km', 0)
+                        estimated_cost = min_km * rule['rate_per_km']
+                        pricing_rule_applied = rule_id
+                        break
+    
+    # Build passengers list
+    all_passengers = [booking_data.employee_id]
+    if booking_data.passengers:
+        all_passengers.extend(booking_data.passengers)
+    
     booking = Booking(
         client_id=current_user.client_id,
         employee_id=booking_data.employee_id,
         booking_type=booking_data.booking_type,
+        trip_type=booking_data.trip_type,
         pickup_location=booking_data.pickup_location,
         dropoff_location=booking_data.dropoff_location,
         pickup_time=booking_data.pickup_time,
+        return_time=booking_data.return_time,
         passenger_name=employee['name'],
         passenger_phone=employee['phone'],
+        passengers=booking_data.passengers or [],
+        recurring_type=booking_data.recurring_type,
+        recurring_days=booking_data.recurring_days or [],
+        recurring_end_date=booking_data.recurring_end_date,
+        vehicle_type_requested=booking_data.vehicle_type_requested,
+        service_type=booking_data.service_type,
+        estimated_cost=estimated_cost,
+        pricing_rule_applied=pricing_rule_applied,
         cost_center=booking_data.cost_center or employee.get('cost_center'),
         notes=booking_data.notes,
         created_by=current_user.id
@@ -1175,8 +1233,25 @@ async def create_booking(booking_data: BookingCreate, current_user: CorporateUse
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
     doc['pickup_time'] = doc['pickup_time'].isoformat()
+    if doc.get('return_time'):
+        doc['return_time'] = doc['return_time'].isoformat()
+    if doc.get('recurring_end_date'):
+        doc['recurring_end_date'] = doc['recurring_end_date'].isoformat()
     
     await db.bookings.insert_one(doc)
+    
+    # Build notes for duty
+    duty_notes_parts = [f"Booking ID: {booking.id}"]
+    if booking.cost_center:
+        duty_notes_parts.append(f"Cost Center: {booking.cost_center}")
+    if booking.trip_type == TripType.ROUND_TRIP:
+        duty_notes_parts.append("Round Trip")
+    if booking.vehicle_type_requested:
+        duty_notes_parts.append(f"Vehicle: {booking.vehicle_type_requested}")
+    if booking.service_type:
+        duty_notes_parts.append(f"Service: {booking.service_type}")
+    if booking_data.notes:
+        duty_notes_parts.append(booking_data.notes)
     
     # AUTO-CREATE DUTY: When corporate creates booking, automatically create duty in admin panel
     duty = Duty(
@@ -1186,7 +1261,7 @@ async def create_booking(booking_data: BookingCreate, current_user: CorporateUse
         pickup_time=booking_data.pickup_time,
         passenger_name=employee['name'],
         passenger_phone=employee['phone'],
-        notes=f"Booking ID: {booking.id} | Cost Center: {booking.cost_center or 'N/A'} | {booking_data.notes or ''}"
+        notes=" | ".join(duty_notes_parts)
     )
     
     duty_doc = duty.model_dump()
@@ -1203,6 +1278,79 @@ async def create_booking(booking_data: BookingCreate, current_user: CorporateUse
     )
     
     return booking
+
+# Corporate Pricing Estimate Endpoint
+class PricingEstimateRequest(BaseModel):
+    pickup_location: str
+    dropoff_location: str
+    trip_type: TripType = TripType.ONE_WAY
+    vehicle_type_requested: Optional[VehicleType] = None
+
+@api_router.post("/corporate/estimate-pricing")
+async def corporate_estimate_pricing(
+    request: PricingEstimateRequest,
+    current_user: CorporateUser = Depends(get_current_corporate_user)
+):
+    """
+    Get pricing estimate for corporate user based on their client's rate card
+    """
+    rate_card = await db.rate_cards.find_one({"client_id": current_user.client_id, "is_active": True}, {"_id": 0})
+    if not rate_card:
+        return {"estimated_cost": None, "message": "No rate card configured for your company"}
+    
+    if not request.vehicle_type_requested:
+        return {"estimated_cost": None, "message": "Please select a vehicle type for pricing estimate"}
+    
+    # Get pricing rules
+    for rule_id in rate_card.get('pricing_rules', []):
+        rule = await db.pricing_rules.find_one({"id": rule_id}, {"_id": 0})
+        if rule and rule['vehicle_type'] == request.vehicle_type_requested:
+            # Try route-based pricing first
+            if rule['pricing_type'] == PricingType.ROUTE_BASED:
+                pickup_lower = request.pickup_location.lower()
+                dropoff_lower = request.dropoff_location.lower()
+                route_from = (rule.get('route_from') or '').lower()
+                route_to = (rule.get('route_to') or '').lower()
+                
+                if route_from and route_to and (route_from in pickup_lower or pickup_lower in route_from) and (route_to in dropoff_lower or dropoff_lower in route_to):
+                    if request.trip_type == TripType.ROUND_TRIP and rule.get('round_trip_price'):
+                        return {
+                            "estimated_cost": rule['round_trip_price'],
+                            "pricing_type": "ROUTE_BASED",
+                            "vehicle_type": request.vehicle_type_requested,
+                            "message": f"Route-based pricing: {rule.get('route_from')} → {rule.get('route_to')} (Round Trip)"
+                        }
+                    elif rule.get('one_way_price'):
+                        return {
+                            "estimated_cost": rule['one_way_price'],
+                            "pricing_type": "ROUTE_BASED",
+                            "vehicle_type": request.vehicle_type_requested,
+                            "message": f"Route-based pricing: {rule.get('route_from')} → {rule.get('route_to')} (One Way)"
+                        }
+            
+            # Try time-based package
+            elif rule['pricing_type'] == PricingType.TIME_BASED:
+                if rule.get('base_fare'):
+                    return {
+                        "estimated_cost": rule['base_fare'],
+                        "pricing_type": "TIME_BASED",
+                        "vehicle_type": request.vehicle_type_requested,
+                        "message": f"Package: {rule.get('package_hours')}hr / {rule.get('package_km')}km"
+                    }
+            
+            # Try per KM pricing
+            elif rule['pricing_type'] == PricingType.PER_KM:
+                if rule.get('rate_per_km'):
+                    min_km = rule.get('minimum_km', 0)
+                    estimated = min_km * rule['rate_per_km']
+                    return {
+                        "estimated_cost": estimated,
+                        "pricing_type": "PER_KM",
+                        "vehicle_type": request.vehicle_type_requested,
+                        "message": f"₹{rule['rate_per_km']}/km (Minimum {min_km}km)"
+                    }
+    
+    return {"estimated_cost": None, "message": "No pricing rule found for selected vehicle type"}
 
 @api_router.get("/corporate/bookings/{booking_id}", response_model=Booking)
 async def get_booking(booking_id: str, current_user: CorporateUser = Depends(get_current_corporate_user)):

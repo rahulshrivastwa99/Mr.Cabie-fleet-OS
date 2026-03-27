@@ -1,13 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, Calendar, Upload } from '@phosphor-icons/react';
+import { Plus, Calendar, Upload, ArrowsLeftRight, CaretDown, Users } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useCorporateAuth } from '../../context/CorporateAuthContext';
 import CSVUploader from '../../components/CSVUploader';
 
 const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api/corporate`;
+const ADMIN_API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+const VEHICLE_TYPES = [
+  { value: 'SEDAN', label: 'Sedan' },
+  { value: 'SUV', label: 'SUV' },
+  { value: 'HATCHBACK', label: 'Hatchback' },
+  { value: 'EV', label: 'Electric Vehicle' },
+  { value: 'LUXURY', label: 'Luxury' }
+];
+
+const SERVICE_TYPES = [
+  { value: 'AIRPORT_TRANSFER', label: 'Airport Transfer' },
+  { value: 'LOCAL_DUTY', label: 'Local Duty' },
+  { value: 'OUTSTATION', label: 'Outstation' },
+  { value: 'EMPLOYEE_TRANSPORT', label: 'Employee Transport' },
+  { value: 'CUSTOM', label: 'Custom' }
+];
+
+const RECURRING_TYPES = [
+  { value: 'DAILY', label: 'Daily' },
+  { value: 'WEEKLY', label: 'Weekly' },
+  { value: 'MONTHLY', label: 'Monthly' }
+];
+
+const WEEKDAYS = [
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+  { value: 0, label: 'Sun' }
+];
 
 const CorporateBookings = () => {
   const { user } = useCorporateAuth();
@@ -16,14 +50,53 @@ const CorporateBookings = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [pricingEstimate, setPricingEstimate] = useState(null);
+  const [estimatingPrice, setEstimatingPrice] = useState(false);
   const [formData, setFormData] = useState({
     employee_id: '',
     pickup_location: '',
     dropoff_location: '',
     pickup_time: '',
     cost_center: '',
-    notes: ''
+    notes: '',
+    // New fields
+    trip_type: 'ONE_WAY',
+    return_time: '',
+    booking_type: 'ONE_TIME',
+    recurring_type: '',
+    recurring_days: [],
+    recurring_end_date: '',
+    vehicle_type_requested: '',
+    service_type: '',
+    passengers: [] // Additional employees for multi-employee booking
   });
+
+  // Fetch pricing estimate when relevant fields change
+  useEffect(() => {
+    const fetchPricingEstimate = async () => {
+      if (formData.pickup_location && formData.dropoff_location && formData.vehicle_type_requested) {
+        setEstimatingPrice(true);
+        try {
+          const response = await axios.post(`${API_BASE}/estimate-pricing`, {
+            pickup_location: formData.pickup_location,
+            dropoff_location: formData.dropoff_location,
+            trip_type: formData.trip_type,
+            vehicle_type_requested: formData.vehicle_type_requested
+          });
+          setPricingEstimate(response.data);
+        } catch (error) {
+          setPricingEstimate(null);
+        } finally {
+          setEstimatingPrice(false);
+        }
+      } else {
+        setPricingEstimate(null);
+      }
+    };
+
+    const debounceTimer = setTimeout(fetchPricingEstimate, 500);
+    return () => clearTimeout(debounceTimer);
+  }, [formData.pickup_location, formData.dropoff_location, formData.trip_type, formData.vehicle_type_requested]);
 
   useEffect(() => {
     fetchData();
@@ -44,27 +117,90 @@ const CorporateBookings = () => {
     }
   };
 
+  const resetForm = () => {
+    setFormData({
+      employee_id: '',
+      pickup_location: '',
+      dropoff_location: '',
+      pickup_time: '',
+      cost_center: '',
+      notes: '',
+      trip_type: 'ONE_WAY',
+      return_time: '',
+      booking_type: 'ONE_TIME',
+      recurring_type: '',
+      recurring_days: [],
+      recurring_end_date: '',
+      vehicle_type_requested: '',
+      service_type: '',
+      passengers: []
+    });
+    setPricingEstimate(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API_BASE}/bookings`, {
-        ...formData,
-        pickup_time: new Date(formData.pickup_time).toISOString()
-      });
+      const payload = {
+        employee_id: formData.employee_id,
+        pickup_location: formData.pickup_location,
+        dropoff_location: formData.dropoff_location,
+        pickup_time: new Date(formData.pickup_time).toISOString(),
+        trip_type: formData.trip_type,
+        booking_type: formData.booking_type,
+        cost_center: formData.cost_center || undefined,
+        notes: formData.notes || undefined,
+        passengers: formData.passengers.length > 0 ? formData.passengers : undefined
+      };
+
+      // Add return time for round trips
+      if (formData.trip_type === 'ROUND_TRIP' && formData.return_time) {
+        payload.return_time = new Date(formData.return_time).toISOString();
+      }
+
+      // Add recurring options
+      if (formData.booking_type === 'RECURRING') {
+        payload.recurring_type = formData.recurring_type || undefined;
+        payload.recurring_days = formData.recurring_days.length > 0 ? formData.recurring_days : undefined;
+        if (formData.recurring_end_date) {
+          payload.recurring_end_date = new Date(formData.recurring_end_date).toISOString();
+        }
+      }
+
+      // Add vehicle and service preferences
+      if (formData.vehicle_type_requested) {
+        payload.vehicle_type_requested = formData.vehicle_type_requested;
+      }
+      if (formData.service_type) {
+        payload.service_type = formData.service_type;
+      }
+
+      await axios.post(`${API_BASE}/bookings`, payload);
       toast.success('Booking created successfully');
       setShowModal(false);
-      setFormData({
-        employee_id: '',
-        pickup_location: '',
-        dropoff_location: '',
-        pickup_time: '',
-        cost_center: '',
-        notes: ''
-      });
+      resetForm();
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to create booking');
     }
+  };
+
+  const togglePassenger = (empId) => {
+    setFormData(prev => ({
+      ...prev,
+      passengers: prev.passengers.includes(empId)
+        ? prev.passengers.filter(id => id !== empId)
+        : [...prev.passengers, empId]
+    }));
+  };
+
+  const toggleRecurringDay = (day) => {
+    setFormData(prev => ({
+      ...prev,
+      recurring_days: prev.recurring_days.includes(day)
+        ? prev.recurring_days.filter(d => d !== day)
+        : [...prev.recurring_days, day]
+    }));
   };
 
   const handleBulkUpload = async (csvData) => {
@@ -170,10 +306,27 @@ const CorporateBookings = () => {
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="text-lg font-semibold">{booking.passenger_name}</h3>
                       <span className={getStatusBadgeClass(booking.status)}>{booking.status}</span>
+                      {booking.trip_type && (
+                        <span className="px-2 py-1 text-xs font-semibold bg-[#F5F5F5] text-[#525252]">
+                          {booking.trip_type === 'ROUND_TRIP' ? 'Round Trip' : 'One Way'}
+                        </span>
+                      )}
+                      {booking.booking_type === 'RECURRING' && (
+                        <span className="px-2 py-1 text-xs font-semibold bg-[#FFF3E0] text-[#FF9800]">
+                          RECURRING
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-[#525252]">{booking.passenger_phone}</p>
                   </div>
-                  <p className="text-xs text-[#525252]">{new Date(booking.pickup_time).toLocaleString()}</p>
+                  <div className="text-right">
+                    <p className="text-xs text-[#525252]">{new Date(booking.pickup_time).toLocaleString()}</p>
+                    {booking.return_time && (
+                      <p className="text-xs text-[#0047FF] mt-1">
+                        Return: {new Date(booking.return_time).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -187,12 +340,38 @@ const CorporateBookings = () => {
                   </div>
                 </div>
 
-                {booking.cost_center && (
-                  <div className="pt-4 border-t border-[#E5E5E5]">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-[#525252] mb-1">Cost Center</p>
-                    <p className="text-sm">{booking.cost_center}</p>
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-4 pt-4 border-t border-[#E5E5E5]">
+                  {booking.vehicle_type_requested && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-[#525252] mb-1">Vehicle</p>
+                      <p className="text-sm">{booking.vehicle_type_requested}</p>
+                    </div>
+                  )}
+                  {booking.service_type && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-[#525252] mb-1">Service</p>
+                      <p className="text-sm">{booking.service_type.replace('_', ' ')}</p>
+                    </div>
+                  )}
+                  {booking.cost_center && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-[#525252] mb-1">Cost Center</p>
+                      <p className="text-sm">{booking.cost_center}</p>
+                    </div>
+                  )}
+                  {booking.passengers && booking.passengers.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-[#525252] mb-1">Passengers</p>
+                      <p className="text-sm">{booking.passengers.length + 1} people</p>
+                    </div>
+                  )}
+                  {booking.estimated_cost && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-[#525252] mb-1">Est. Cost</p>
+                      <p className="text-sm font-semibold text-[#0047FF]">₹{booking.estimated_cost.toFixed(2)}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })
@@ -200,14 +379,15 @@ const CorporateBookings = () => {
       </div>
 
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold tracking-tight">Create New Booking</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+            {/* Primary Employee Selection */}
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
-                Employee
+                Primary Employee
               </label>
               <Select value={formData.employee_id} onValueChange={(value) => setFormData({ ...formData, employee_id: value })}>
                 <SelectTrigger data-testid="employee-select">
@@ -221,78 +401,304 @@ const CorporateBookings = () => {
               </Select>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
-                Pickup Location
-              </label>
-              <input
-                type="text"
-                value={formData.pickup_location}
-                onChange={(e) => setFormData({ ...formData, pickup_location: e.target.value })}
-                className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
-                required
-                data-testid="pickup-input"
-              />
+            {/* Trip Type & Service Type Row */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                  Trip Type
+                </label>
+                <Select value={formData.trip_type} onValueChange={(value) => setFormData({ ...formData, trip_type: value })}>
+                  <SelectTrigger data-testid="trip-type-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ONE_WAY">One Way</SelectItem>
+                    <SelectItem value="ROUND_TRIP">Round Trip</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                  Service Type
+                </label>
+                <Select value={formData.service_type} onValueChange={(value) => setFormData({ ...formData, service_type: value })}>
+                  <SelectTrigger data-testid="service-type-select">
+                    <SelectValue placeholder="Select service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SERVICE_TYPES.map(type => (
+                      <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
+            {/* Vehicle Type Preference */}
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
-                Dropoff Location
+                Vehicle Preference
               </label>
-              <input
-                type="text"
-                value={formData.dropoff_location}
-                onChange={(e) => setFormData({ ...formData, dropoff_location: e.target.value })}
-                className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
-                required
-                data-testid="dropoff-input"
-              />
+              <Select value={formData.vehicle_type_requested} onValueChange={(value) => setFormData({ ...formData, vehicle_type_requested: value })}>
+                <SelectTrigger data-testid="vehicle-type-select">
+                  <SelectValue placeholder="Any vehicle (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {VEHICLE_TYPES.map(type => (
+                    <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
-                Pickup Time
-              </label>
-              <input
-                type="datetime-local"
-                value={formData.pickup_time}
-                onChange={(e) => setFormData({ ...formData, pickup_time: e.target.value })}
-                className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
-                required
-                data-testid="pickup-time-input"
-              />
+            {/* Pricing Estimate Display */}
+            {(pricingEstimate || estimatingPrice) && (
+              <div className="p-4 bg-[#E6EFFF] border border-[#0047FF] rounded-sm" data-testid="pricing-estimate">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-1">
+                      Estimated Cost
+                    </p>
+                    {estimatingPrice ? (
+                      <p className="text-sm text-[#525252]">Calculating...</p>
+                    ) : pricingEstimate?.estimated_cost ? (
+                      <>
+                        <p className="text-2xl font-bold text-[#0047FF]">₹{pricingEstimate.estimated_cost.toFixed(2)}</p>
+                        <p className="text-xs text-[#525252] mt-1">{pricingEstimate.message}</p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-[#525252]">{pricingEstimate?.message || 'Enter pickup, dropoff & vehicle type'}</p>
+                    )}
+                  </div>
+                  {pricingEstimate?.pricing_type && (
+                    <span className="text-xs px-2 py-1 bg-white text-[#0047FF] font-semibold">
+                      {pricingEstimate.pricing_type.replace('_', ' ')}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Location Fields */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                  Pickup Location
+                </label>
+                <input
+                  type="text"
+                  value={formData.pickup_location}
+                  onChange={(e) => setFormData({ ...formData, pickup_location: e.target.value })}
+                  className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
+                  required
+                  placeholder="e.g., Sector 62 Noida"
+                  data-testid="pickup-input"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                  Dropoff Location
+                </label>
+                <input
+                  type="text"
+                  value={formData.dropoff_location}
+                  onChange={(e) => setFormData({ ...formData, dropoff_location: e.target.value })}
+                  className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
+                  required
+                  placeholder="e.g., IGI Airport T3"
+                  data-testid="dropoff-input"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
-                Cost Center (Optional)
-              </label>
-              <input
-                type="text"
-                value={formData.cost_center}
-                onChange={(e) => setFormData({ ...formData, cost_center: e.target.value })}
-                className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
-                data-testid="cost-center-input"
-              />
+            {/* Time Fields */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                  Pickup Time
+                </label>
+                <input
+                  type="datetime-local"
+                  value={formData.pickup_time}
+                  onChange={(e) => setFormData({ ...formData, pickup_time: e.target.value })}
+                  className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
+                  required
+                  data-testid="pickup-time-input"
+                />
+              </div>
+              {formData.trip_type === 'ROUND_TRIP' && (
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                    Return Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={formData.return_time}
+                    onChange={(e) => setFormData({ ...formData, return_time: e.target.value })}
+                    className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
+                    data-testid="return-time-input"
+                  />
+                </div>
+              )}
             </div>
 
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
-                Notes (Optional)
+            {/* Booking Type (One-time / Recurring) */}
+            <div className="p-4 bg-[#FAFAFA] border border-[#E5E5E5]">
+              <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-3 block">
+                Booking Schedule
               </label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
-                rows="3"
-                data-testid="notes-input"
-              />
+              <div className="flex gap-4 mb-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="booking_type"
+                    value="ONE_TIME"
+                    checked={formData.booking_type === 'ONE_TIME'}
+                    onChange={(e) => setFormData({ ...formData, booking_type: e.target.value })}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm font-medium">One-Time Booking</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="booking_type"
+                    value="RECURRING"
+                    checked={formData.booking_type === 'RECURRING'}
+                    onChange={(e) => setFormData({ ...formData, booking_type: e.target.value })}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm font-medium">Recurring Booking</span>
+                </label>
+              </div>
+
+              {formData.booking_type === 'RECURRING' && (
+                <div className="space-y-4 pt-4 border-t border-[#E5E5E5]">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                        Recurrence Pattern
+                      </label>
+                      <Select value={formData.recurring_type} onValueChange={(value) => setFormData({ ...formData, recurring_type: value })}>
+                        <SelectTrigger data-testid="recurring-type-select">
+                          <SelectValue placeholder="Select pattern" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RECURRING_TYPES.map(type => (
+                            <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                        End Date
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.recurring_end_date}
+                        onChange={(e) => setFormData({ ...formData, recurring_end_date: e.target.value })}
+                        className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] text-sm"
+                        data-testid="recurring-end-date-input"
+                      />
+                    </div>
+                  </div>
+
+                  {formData.recurring_type === 'WEEKLY' && (
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                        Repeat on Days
+                      </label>
+                      <div className="flex gap-2 flex-wrap">
+                        {WEEKDAYS.map(day => (
+                          <button
+                            key={day.value}
+                            type="button"
+                            onClick={() => toggleRecurringDay(day.value)}
+                            className={`px-3 py-1.5 text-xs font-semibold border transition-colors ${
+                              formData.recurring_days.includes(day.value)
+                                ? 'bg-[#0047FF] text-white border-[#0047FF]'
+                                : 'bg-white text-[#525252] border-[#E5E5E5] hover:bg-[#F5F5F5]'
+                            }`}
+                            data-testid={`day-${day.label.toLowerCase()}`}
+                          >
+                            {day.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Multi-Employee Booking */}
+            <div className="p-4 bg-[#FAFAFA] border border-[#E5E5E5]">
+              <div className="flex items-center gap-2 mb-3">
+                <Users size={18} className="text-[#525252]" />
+                <label className="text-xs font-semibold uppercase tracking-wider text-[#525252]">
+                  Additional Passengers (Optional)
+                </label>
+              </div>
+              <p className="text-xs text-[#525252] mb-3">Select other employees traveling together</p>
+              <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                {employees
+                  .filter(emp => emp.id !== formData.employee_id)
+                  .map(emp => (
+                    <label
+                      key={emp.id}
+                      className="flex items-center gap-2 p-2 border border-[#E5E5E5] bg-white hover:bg-[#FAFAFA] cursor-pointer text-sm"
+                    >
+                      <Checkbox
+                        checked={formData.passengers.includes(emp.id)}
+                        onCheckedChange={() => togglePassenger(emp.id)}
+                        data-testid={`passenger-${emp.employee_id}`}
+                      />
+                      <span className="truncate">{emp.name}</span>
+                    </label>
+                  ))}
+              </div>
+              {formData.passengers.length > 0 && (
+                <p className="text-xs text-[#0047FF] mt-2 font-medium">
+                  {formData.passengers.length + 1} passengers selected
+                </p>
+              )}
+            </div>
+
+            {/* Cost Center & Notes */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                  Cost Center (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={formData.cost_center}
+                  onChange={(e) => setFormData({ ...formData, cost_center: e.target.value })}
+                  className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
+                  placeholder="e.g., ENG-001"
+                  data-testid="cost-center-input"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                  Notes (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
+                  placeholder="Special instructions"
+                  data-testid="notes-input"
+                />
+              </div>
             </div>
 
             <div className="flex gap-3 pt-4">
               <button
                 type="button"
-                onClick={() => setShowModal(false)}
+                onClick={() => { setShowModal(false); resetForm(); }}
                 className="flex-1 px-4 py-2 border border-[#E5E5E5] text-sm font-medium hover:bg-[#F5F5F5] transition-colors duration-150"
               >
                 Cancel

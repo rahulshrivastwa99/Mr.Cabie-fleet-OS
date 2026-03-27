@@ -29,6 +29,9 @@ const Layout = () => {
     { path: '/tracking', icon: MapPin, label: 'Live Tracking' },
     { path: '/billing', icon: Receipt, label: 'Billing' },
     { path: '/clients', icon: Building, label: 'Clients' },
+    { path: '/services', icon: Gauge, label: 'Services' },
+    { path: '/pricing-rules', icon: Gauge, label: 'Pricing Rules' },
+    { path: '/rate-cards', icon: Gauge, label: 'Rate Cards' },
   ];
 
   return (

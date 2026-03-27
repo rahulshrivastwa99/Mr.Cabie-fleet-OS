@@ -9,6 +9,9 @@ import DutyManagement from './pages/DutyManagement';
 import LiveTracking from './pages/LiveTracking';
 import Billing from './pages/Billing';
 import ClientManagement from './pages/ClientManagement';
+import ServicesManagement from './pages/ServicesManagement';
+import PricingRules from './pages/PricingRules';
+import RateCards from './pages/RateCards';
 import Layout from './components/Layout';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -43,6 +46,9 @@ function App() {
               <Route path="tracking" element={<LiveTracking />} />
               <Route path="billing" element={<Billing />} />
               <Route path="clients" element={<ClientManagement />} />
+              <Route path="services" element={<ServicesManagement />} />
+              <Route path="pricing-rules" element={<PricingRules />} />
+              <Route path="rate-cards" element={<RateCards />} />
             </Route>
 
             {/* Corporate Portal Routes */}
