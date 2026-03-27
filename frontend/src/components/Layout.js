@@ -9,7 +9,9 @@ import {
   MapPin,
   Receipt,
   Building,
-  SignOut
+  SignOut,
+  FileText,
+  Handshake
 } from '@phosphor-icons/react';
 
 const Layout = () => {
@@ -25,13 +27,12 @@ const Layout = () => {
     { path: '/', icon: Gauge, label: 'Dashboard', exact: true },
     { path: '/fleet', icon: Truck, label: 'Fleet' },
     { path: '/drivers', icon: UserCircle, label: 'Drivers' },
-    { path: '/duties', icon: Notebook, label: 'Duties' },
+    { path: '/trips', icon: Notebook, label: 'Trips' },
+    { path: '/duty-slips', icon: FileText, label: 'Duty Slips' },
+    { path: '/contracts', icon: Handshake, label: 'Contracts' },
     { path: '/tracking', icon: MapPin, label: 'Live Tracking' },
     { path: '/billing', icon: Receipt, label: 'Billing' },
     { path: '/clients', icon: Building, label: 'Clients' },
-    { path: '/services', icon: Gauge, label: 'Services' },
-    { path: '/pricing-rules', icon: Gauge, label: 'Pricing Rules' },
-    { path: '/rate-cards', icon: Gauge, label: 'Rate Cards' },
   ];
 
   return (

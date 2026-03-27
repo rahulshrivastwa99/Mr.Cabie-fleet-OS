@@ -5,13 +5,12 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import FleetManagement from './pages/FleetManagement';
 import DriverManagement from './pages/DriverManagement';
-import DutyManagement from './pages/DutyManagement';
+import TripManagement from './pages/TripManagement';
+import DutySlips from './pages/DutySlips';
+import ContractManagement from './pages/ContractManagement';
 import LiveTracking from './pages/LiveTracking';
 import Billing from './pages/Billing';
 import ClientManagement from './pages/ClientManagement';
-import ServicesManagement from './pages/ServicesManagement';
-import PricingRules from './pages/PricingRules';
-import RateCards from './pages/RateCards';
 import Layout from './components/Layout';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -27,6 +26,7 @@ import CorporateEmployees from './pages/corporate/CorporateEmployees';
 import CorporateTracking from './pages/corporate/CorporateTracking';
 import CorporateInvoices from './pages/corporate/CorporateInvoices';
 import CorporateReports from './pages/corporate/CorporateReports';
+import CorporateDutySlips from './pages/corporate/CorporateDutySlips';
 
 import './App.css';
 
@@ -42,13 +42,12 @@ function App() {
               <Route index element={<Dashboard />} />
               <Route path="fleet" element={<FleetManagement />} />
               <Route path="drivers" element={<DriverManagement />} />
-              <Route path="duties" element={<DutyManagement />} />
+              <Route path="trips" element={<TripManagement />} />
+              <Route path="duty-slips" element={<DutySlips />} />
+              <Route path="contracts" element={<ContractManagement />} />
               <Route path="tracking" element={<LiveTracking />} />
               <Route path="billing" element={<Billing />} />
               <Route path="clients" element={<ClientManagement />} />
-              <Route path="services" element={<ServicesManagement />} />
-              <Route path="pricing-rules" element={<PricingRules />} />
-              <Route path="rate-cards" element={<RateCards />} />
             </Route>
 
             {/* Corporate Portal Routes */}
@@ -56,6 +55,7 @@ function App() {
             <Route path="/corporate" element={<CorporateProtectedRoute><CorporateLayout /></CorporateProtectedRoute>}>
               <Route index element={<CorporateDashboard />} />
               <Route path="bookings" element={<CorporateBookings />} />
+              <Route path="duty-slips" element={<CorporateDutySlips />} />
               <Route path="employees" element={<CorporateEmployees />} />
               <Route path="tracking" element={<CorporateTracking />} />
               <Route path="invoices" element={<CorporateInvoices />} />

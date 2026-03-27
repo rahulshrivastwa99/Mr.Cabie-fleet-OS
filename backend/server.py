@@ -51,7 +51,8 @@ class DriverStatus(str, Enum):
     OFF_DUTY = "OFF_DUTY"
     INACTIVE = "INACTIVE"
 
-class DutyStatus(str, Enum):
+# Renamed from DutyStatus to TripStatus
+class TripStatus(str, Enum):
     CREATED = "CREATED"
     ASSIGNED = "ASSIGNED"
     ACCEPTED = "ACCEPTED"
@@ -59,6 +60,27 @@ class DutyStatus(str, Enum):
     COMPLETED = "COMPLETED"
     BILLED = "BILLED"
     CLOSED = "CLOSED"
+
+# Keep DutyStatus as alias for backward compatibility
+DutyStatus = TripStatus
+
+class DutySlipStatus(str, Enum):
+    DRAFT = "DRAFT"       # Created but not signed
+    SIGNED = "SIGNED"     # Signed by passenger - LOCKED
+    DISPUTED = "DISPUTED" # Under dispute
+
+class ContractType(str, Enum):
+    FIXED_MONTHLY = "FIXED_MONTHLY"
+    PER_KM = "PER_KM"
+    PER_DAY = "PER_DAY"
+    PACKAGE = "PACKAGE"       # e.g., 8hr/80km
+    ROUTE_BASED = "ROUTE_BASED"
+    HYBRID = "HYBRID"         # Base + usage
+
+class BillingCycle(str, Enum):
+    WEEKLY = "WEEKLY"
+    BIWEEKLY = "BIWEEKLY"
+    MONTHLY = "MONTHLY"
 
 class InvoiceStatus(str, Enum):
     DRAFT = "DRAFT"
@@ -184,48 +206,226 @@ class ClientCreate(BaseModel):
     phone: str
     gstin: Optional[str] = None
 
-class Duty(BaseModel):
+# Renamed from Duty to Trip
+class Trip(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     client_id: str
+    booking_id: Optional[str] = None  # Link to parent booking
+    contract_id: Optional[str] = None  # Link to contract for pricing
     vehicle_id: Optional[str] = None
     driver_id: Optional[str] = None
-    status: DutyStatus = DutyStatus.CREATED
+    status: TripStatus = TripStatus.CREATED
+    trip_type: TripType = TripType.ONE_WAY
     pickup_location: str
     dropoff_location: str
     pickup_time: datetime
+    end_time: Optional[datetime] = None
     passenger_name: str
     passenger_phone: str
+    passengers: List[str] = []  # Multi-passenger employee IDs
     notes: Optional[str] = None
+    duty_slip_id: Optional[str] = None  # 1:1 link to DutySlip
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class DutyCreate(BaseModel):
+# Alias for backward compatibility
+Duty = Trip
+
+class TripCreate(BaseModel):
     client_id: str
+    booking_id: Optional[str] = None
+    contract_id: Optional[str] = None
+    trip_type: TripType = TripType.ONE_WAY
     pickup_location: str
     dropoff_location: str
     pickup_time: datetime
     passenger_name: str
     passenger_phone: str
+    passengers: Optional[List[str]] = []
     notes: Optional[str] = None
 
-class DutyAssign(BaseModel):
+# Alias for backward compatibility
+DutyCreate = TripCreate
+
+class TripAssign(BaseModel):
     vehicle_id: str
     driver_id: str
 
-class DutyStatusUpdate(BaseModel):
-    status: DutyStatus
+# Alias for backward compatibility
+DutyAssign = TripAssign
+
+class TripStatusUpdate(BaseModel):
+    status: TripStatus
+
+# Alias for backward compatibility
+DutyStatusUpdate = TripStatusUpdate
+
+# ==================== DUTY SLIP MODEL ====================
+
+class DutySlip(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    trip_id: str  # 1:1 with Trip
+    client_id: str
+    
+    # Trip Info
+    date: datetime
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    trip_type: TripType = TripType.ONE_WAY
+    
+    # Driver & Vehicle
+    driver_id: str
+    driver_name: str
+    vehicle_id: str
+    vehicle_number: str
+    vehicle_type: VehicleType
+    
+    # Client Info
+    corporate_name: str
+    pickup_location: str
+    dropoff_location: str
+    
+    # Meter Reading
+    opening_km: float
+    closing_km: Optional[float] = None
+    total_km: Optional[float] = None  # Auto-calculated
+    
+    # Passengers
+    passenger_name: str
+    passengers: List[dict] = []  # [{name, phone}]
+    
+    # Status & Signature
+    status: DutySlipStatus = DutySlipStatus.DRAFT
+    driver_remarks: Optional[str] = None
+    passenger_signature: Optional[str] = None  # Base64 signature image
+    signed_at: Optional[datetime] = None
+    signed_by: Optional[str] = None  # Passenger name
+    
+    # Note
+    note: str = "Additional charges (Toll, Parking, Taxes, GST) will be added in final invoice"
+    
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class DutySlipCreate(BaseModel):
+    trip_id: str
+    opening_km: float
+    driver_remarks: Optional[str] = None
+
+class DutySlipComplete(BaseModel):
+    closing_km: float
+    driver_remarks: Optional[str] = None
+
+class DutySlipSign(BaseModel):
+    passenger_signature: str  # Base64 signature
+    signed_by: str  # Passenger name
+
+# ==================== CONTRACT MODEL ====================
+
+class Contract(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    client_id: str
+    name: str
+    contract_type: ContractType
+    
+    # Contract Period
+    start_date: datetime
+    end_date: datetime
+    billing_cycle: BillingCycle = BillingCycle.MONTHLY
+    
+    # Pricing Configuration
+    # Fixed Monthly
+    monthly_amount: Optional[float] = None
+    included_days: Optional[int] = None
+    included_km: Optional[float] = None
+    
+    # Per KM
+    rate_per_km: Optional[float] = None
+    minimum_km_per_day: Optional[float] = None
+    
+    # Per Day
+    daily_rate: Optional[float] = None
+    
+    # Package (e.g., 8hr/80km)
+    package_hours: Optional[float] = None
+    package_km: Optional[float] = None
+    package_rate: Optional[float] = None
+    extra_hour_rate: Optional[float] = None
+    extra_km_rate: Optional[float] = None
+    
+    # Route-Based
+    routes: List[dict] = []  # [{from, to, one_way_price, round_trip_price}]
+    
+    # Hybrid
+    base_monthly_amount: Optional[float] = None
+    usage_rate_per_km: Optional[float] = None
+    
+    # Vehicle Type specific rates
+    vehicle_rates: List[dict] = []  # [{vehicle_type, rate_multiplier}]
+    
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ContractCreate(BaseModel):
+    client_id: str
+    name: str
+    contract_type: ContractType
+    start_date: datetime
+    end_date: datetime
+    billing_cycle: BillingCycle = BillingCycle.MONTHLY
+    
+    # Optional pricing fields
+    monthly_amount: Optional[float] = None
+    included_days: Optional[int] = None
+    included_km: Optional[float] = None
+    rate_per_km: Optional[float] = None
+    minimum_km_per_day: Optional[float] = None
+    daily_rate: Optional[float] = None
+    package_hours: Optional[float] = None
+    package_km: Optional[float] = None
+    package_rate: Optional[float] = None
+    extra_hour_rate: Optional[float] = None
+    extra_km_rate: Optional[float] = None
+    routes: Optional[List[dict]] = []
+    base_monthly_amount: Optional[float] = None
+    usage_rate_per_km: Optional[float] = None
+    vehicle_rates: Optional[List[dict]] = []
 
 class Invoice(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     invoice_number: str
     client_id: str
-    duties: List[str]  # List of duty IDs
-    line_items: List[dict] = []  # List of InvoiceLineItem dicts
-    amount: float
-    gst_amount: float
-    total_amount: float
+    contract_id: Optional[str] = None  # Link to contract for pricing
+    duty_slip_ids: List[str] = []  # List of DutySlip IDs
+    trips: List[str] = []  # List of Trip IDs (kept for backward compatibility)
+    duties: List[str] = []  # Alias for trips (backward compatibility)
+    
+    # Billing Period
+    billing_period_start: Optional[datetime] = None
+    billing_period_end: Optional[datetime] = None
+    
+    # Line Items (calculated from duty slips + contract)
+    line_items: List[dict] = []
+    
+    # Extra Charges (Admin only: Toll, Parking, GST, etc.)
+    extra_charges: List[dict] = []  # [{name, amount, description}]
+    
+    # Amounts
+    base_amount: float = 0  # From contract calculation
+    extra_charges_amount: float = 0  # Sum of extra charges
+    subtotal: float = 0  # base + extra
+    gst_percentage: float = 18.0
+    gst_amount: float = 0
+    total_amount: float = 0
+    
+    # Legacy fields
+    amount: float = 0  # Alias for subtotal
+    
     status: InvoiceStatus = InvoiceStatus.DRAFT
     invoice_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     due_date: datetime
@@ -233,11 +433,23 @@ class Invoice(BaseModel):
 
 class InvoiceCreate(BaseModel):
     client_id: str
-    duties: List[str]
-    line_items: Optional[List[dict]] = []  # Will be InvoiceLineItemCreate dicts
-    amount: float
+    contract_id: Optional[str] = None
+    duty_slip_ids: List[str] = []
+    billing_period_start: Optional[datetime] = None
+    billing_period_end: Optional[datetime] = None
+    extra_charges: Optional[List[dict]] = []  # [{name, amount, description}]
     gst_percentage: float = 18.0
     due_days: int = 30
+    
+    # Legacy fields
+    duties: Optional[List[str]] = []
+    line_items: Optional[List[dict]] = []
+    amount: Optional[float] = None
+
+class ExtraChargeInput(BaseModel):
+    name: str  # Toll, Parking, Driver Allowance, Night Charges, etc.
+    amount: float
+    description: Optional[str] = None
 
 class DashboardStats(BaseModel):
     total_vehicles: int
@@ -302,6 +514,7 @@ class Booking(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     client_id: str
     employee_id: str
+    contract_id: Optional[str] = None  # Link to contract for pricing
     booking_type: BookingType = BookingType.ONE_TIME
     status: BookingStatus = BookingStatus.PENDING
     
@@ -330,9 +543,12 @@ class Booking(BaseModel):
     estimated_cost: Optional[float] = None
     pricing_rule_applied: Optional[str] = None  # PricingRule ID
     
+    # Trip IDs (one booking can create multiple trips for recurring)
+    trip_ids: List[str] = []
+    
     cost_center: Optional[str] = None
     notes: Optional[str] = None
-    duty_id: Optional[str] = None  # Linked duty created by admin
+    duty_id: Optional[str] = None  # Legacy: single trip link
     vehicle_id: Optional[str] = None
     driver_id: Optional[str] = None
     created_by: str  # Corporate user ID
@@ -770,30 +986,177 @@ async def get_invoices(current_user: User = Depends(get_current_user)):
         inv['invoice_date'] = datetime.fromisoformat(inv['invoice_date']) if isinstance(inv['invoice_date'], str) else inv['invoice_date']
         inv['due_date'] = datetime.fromisoformat(inv['due_date']) if isinstance(inv['due_date'], str) else inv['due_date']
         inv['created_at'] = datetime.fromisoformat(inv['created_at']) if isinstance(inv['created_at'], str) else inv['created_at']
+        if inv.get('billing_period_start'):
+            inv['billing_period_start'] = datetime.fromisoformat(inv['billing_period_start']) if isinstance(inv['billing_period_start'], str) else inv['billing_period_start']
+        if inv.get('billing_period_end'):
+            inv['billing_period_end'] = datetime.fromisoformat(inv['billing_period_end']) if isinstance(inv['billing_period_end'], str) else inv['billing_period_end']
     return invoices
 
 @api_router.post("/invoices", response_model=Invoice)
 async def create_invoice(invoice_data: InvoiceCreate, current_user: User = Depends(get_current_user)):
+    from datetime import timedelta
+    
     # Generate invoice number
     count = await db.invoices.count_documents({}) + 1
     invoice_number = f"INV-{count:05d}"
     
-    # Calculate amounts
-    gst_amount = invoice_data.amount * (invoice_data.gst_percentage / 100)
-    total_amount = invoice_data.amount + gst_amount
-    
-    # Calculate due date
-    from datetime import timedelta
     invoice_date = datetime.now(timezone.utc)
     due_date = invoice_date + timedelta(days=invoice_data.due_days)
+    
+    # Calculate amounts from duty slips + contract
+    base_amount = 0
+    line_items = []
+    
+    if invoice_data.duty_slip_ids:
+        # Fetch duty slips
+        duty_slips = await db.duty_slips.find({"id": {"$in": invoice_data.duty_slip_ids}}, {"_id": 0}).to_list(1000)
+        
+        # Get contract for pricing
+        contract = None
+        if invoice_data.contract_id:
+            contract = await db.contracts.find_one({"id": invoice_data.contract_id}, {"_id": 0})
+        
+        if contract:
+            # Calculate based on contract type
+            total_km = sum(ds.get('total_km', 0) or 0 for ds in duty_slips)
+            total_trips = len(duty_slips)
+            
+            if contract['contract_type'] == ContractType.FIXED_MONTHLY:
+                base_amount = contract.get('monthly_amount', 0)
+                line_items.append({
+                    "description": f"Fixed Monthly Contract - {contract['name']}",
+                    "quantity": 1,
+                    "rate": base_amount,
+                    "amount": base_amount
+                })
+            
+            elif contract['contract_type'] == ContractType.PER_KM:
+                rate = contract.get('rate_per_km', 0)
+                base_amount = total_km * rate
+                line_items.append({
+                    "description": f"Per KM Billing @ ₹{rate}/km",
+                    "quantity": total_km,
+                    "rate": rate,
+                    "amount": base_amount
+                })
+            
+            elif contract['contract_type'] == ContractType.PER_DAY:
+                rate = contract.get('daily_rate', 0)
+                base_amount = total_trips * rate
+                line_items.append({
+                    "description": f"Per Day Billing @ ₹{rate}/day",
+                    "quantity": total_trips,
+                    "rate": rate,
+                    "amount": base_amount
+                })
+            
+            elif contract['contract_type'] == ContractType.PACKAGE:
+                # Calculate per trip package charges
+                pkg_rate = contract.get('package_rate', 0)
+                pkg_hours = contract.get('package_hours', 8)
+                pkg_km = contract.get('package_km', 80)
+                extra_hour_rate = contract.get('extra_hour_rate', 0)
+                extra_km_rate = contract.get('extra_km_rate', 0)
+                
+                for ds in duty_slips:
+                    trip_km = ds.get('total_km', 0) or 0
+                    # Calculate hours from start/end time
+                    trip_hours = 0
+                    if ds.get('start_time') and ds.get('end_time'):
+                        start = datetime.fromisoformat(ds['start_time']) if isinstance(ds['start_time'], str) else ds['start_time']
+                        end = datetime.fromisoformat(ds['end_time']) if isinstance(ds['end_time'], str) else ds['end_time']
+                        trip_hours = (end - start).total_seconds() / 3600
+                    
+                    trip_amount = pkg_rate
+                    extra_km = max(0, trip_km - pkg_km)
+                    extra_hours = max(0, trip_hours - pkg_hours)
+                    
+                    trip_amount += extra_km * extra_km_rate
+                    trip_amount += extra_hours * extra_hour_rate
+                    
+                    base_amount += trip_amount
+                    line_items.append({
+                        "description": f"Trip {ds['id'][:8]} - Package {pkg_hours}hr/{pkg_km}km",
+                        "quantity": 1,
+                        "rate": pkg_rate,
+                        "km": trip_km,
+                        "extra_km": extra_km,
+                        "extra_km_charge": extra_km * extra_km_rate,
+                        "amount": trip_amount
+                    })
+            
+            elif contract['contract_type'] == ContractType.ROUTE_BASED:
+                routes = contract.get('routes', [])
+                for ds in duty_slips:
+                    pickup = ds.get('pickup_location', '').lower()
+                    dropoff = ds.get('dropoff_location', '').lower()
+                    trip_type = ds.get('trip_type', TripType.ONE_WAY)
+                    
+                    route_price = 0
+                    for route in routes:
+                        if route.get('from', '').lower() in pickup and route.get('to', '').lower() in dropoff:
+                            if trip_type == TripType.ROUND_TRIP:
+                                route_price = route.get('round_trip_price', 0)
+                            else:
+                                route_price = route.get('one_way_price', 0)
+                            break
+                    
+                    base_amount += route_price
+                    line_items.append({
+                        "description": f"Route: {ds['pickup_location']} → {ds['dropoff_location']}",
+                        "quantity": 1,
+                        "rate": route_price,
+                        "amount": route_price
+                    })
+            
+            elif contract['contract_type'] == ContractType.HYBRID:
+                base_monthly = contract.get('base_monthly_amount', 0)
+                usage_rate = contract.get('usage_rate_per_km', 0)
+                base_amount = base_monthly + (total_km * usage_rate)
+                line_items.append({
+                    "description": f"Base Monthly Amount",
+                    "quantity": 1,
+                    "rate": base_monthly,
+                    "amount": base_monthly
+                })
+                line_items.append({
+                    "description": f"Usage Charge @ ₹{usage_rate}/km",
+                    "quantity": total_km,
+                    "rate": usage_rate,
+                    "amount": total_km * usage_rate
+                })
+    
+    # Legacy support: if amount is provided directly
+    if invoice_data.amount is not None and base_amount == 0:
+        base_amount = invoice_data.amount
+    
+    # Calculate extra charges
+    extra_charges = invoice_data.extra_charges or []
+    extra_charges_amount = sum(ec.get('amount', 0) for ec in extra_charges)
+    
+    # Calculate totals
+    subtotal = base_amount + extra_charges_amount
+    gst_amount = subtotal * (invoice_data.gst_percentage / 100)
+    total_amount = subtotal + gst_amount
     
     invoice = Invoice(
         invoice_number=invoice_number,
         client_id=invoice_data.client_id,
-        duties=invoice_data.duties,
-        amount=invoice_data.amount,
+        contract_id=invoice_data.contract_id,
+        duty_slip_ids=invoice_data.duty_slip_ids,
+        trips=invoice_data.duties or [],
+        duties=invoice_data.duties or [],
+        billing_period_start=invoice_data.billing_period_start,
+        billing_period_end=invoice_data.billing_period_end,
+        line_items=line_items or invoice_data.line_items or [],
+        extra_charges=extra_charges,
+        base_amount=base_amount,
+        extra_charges_amount=extra_charges_amount,
+        subtotal=subtotal,
+        gst_percentage=invoice_data.gst_percentage,
         gst_amount=gst_amount,
         total_amount=total_amount,
+        amount=subtotal,
         invoice_date=invoice_date,
         due_date=due_date
     )
@@ -802,14 +1165,369 @@ async def create_invoice(invoice_data: InvoiceCreate, current_user: User = Depen
     doc['invoice_date'] = doc['invoice_date'].isoformat()
     doc['due_date'] = doc['due_date'].isoformat()
     doc['created_at'] = doc['created_at'].isoformat()
+    if doc.get('billing_period_start'):
+        doc['billing_period_start'] = doc['billing_period_start'].isoformat()
+    if doc.get('billing_period_end'):
+        doc['billing_period_end'] = doc['billing_period_end'].isoformat()
     
     await db.invoices.insert_one(doc)
     
-    # Mark duties as billed
-    await db.duties.update_many(
-        {"id": {"$in": invoice_data.duties}},
-        {"$set": {"status": DutyStatus.BILLED}}
+    # Mark trips associated with duty slips as billed
+    # Note: Duty slips remain SIGNED - only trips get BILLED status
+    if invoice_data.duty_slip_ids:
+        # Get trip IDs from duty slips
+        duty_slips_for_billing = await db.duty_slips.find(
+            {"id": {"$in": invoice_data.duty_slip_ids}},
+            {"trip_id": 1, "_id": 0}
+        ).to_list(1000)
+        trip_ids_from_slips = [ds.get('trip_id') for ds in duty_slips_for_billing if ds.get('trip_id')]
+        if trip_ids_from_slips:
+            await db.duties.update_many(
+                {"id": {"$in": trip_ids_from_slips}},
+                {"$set": {"status": TripStatus.BILLED}}
+            )
+    
+    # Mark trips as billed (legacy support)
+    if invoice_data.duties:
+        await db.duties.update_many(
+            {"id": {"$in": invoice_data.duties}},
+            {"$set": {"status": TripStatus.BILLED}}
+        )
+    
+    return invoice
+
+# ==================== CONTRACT API ENDPOINTS ====================
+
+@api_router.get("/contracts", response_model=List[Contract])
+async def get_contracts(current_user: User = Depends(get_current_user)):
+    contracts = await db.contracts.find({}, {"_id": 0}).to_list(1000)
+    for c in contracts:
+        c['start_date'] = datetime.fromisoformat(c['start_date']) if isinstance(c['start_date'], str) else c['start_date']
+        c['end_date'] = datetime.fromisoformat(c['end_date']) if isinstance(c['end_date'], str) else c['end_date']
+        c['created_at'] = datetime.fromisoformat(c['created_at']) if isinstance(c['created_at'], str) else c['created_at']
+        c['updated_at'] = datetime.fromisoformat(c['updated_at']) if isinstance(c['updated_at'], str) else c['updated_at']
+    return contracts
+
+@api_router.post("/contracts", response_model=Contract)
+async def create_contract(contract_data: ContractCreate, current_user: User = Depends(get_current_user)):
+    # Verify client exists
+    client = await db.clients.find_one({"id": contract_data.client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    contract = Contract(**contract_data.model_dump())
+    doc = contract.model_dump()
+    doc['start_date'] = doc['start_date'].isoformat()
+    doc['end_date'] = doc['end_date'].isoformat()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    
+    await db.contracts.insert_one(doc)
+    return contract
+
+@api_router.get("/contracts/{contract_id}", response_model=Contract)
+async def get_contract(contract_id: str, current_user: User = Depends(get_current_user)):
+    contract = await db.contracts.find_one({"id": contract_id}, {"_id": 0})
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    contract['start_date'] = datetime.fromisoformat(contract['start_date'])
+    contract['end_date'] = datetime.fromisoformat(contract['end_date'])
+    contract['created_at'] = datetime.fromisoformat(contract['created_at'])
+    contract['updated_at'] = datetime.fromisoformat(contract['updated_at'])
+    return Contract(**contract)
+
+@api_router.put("/contracts/{contract_id}", response_model=Contract)
+async def update_contract(contract_id: str, contract_data: ContractCreate, current_user: User = Depends(get_current_user)):
+    existing = await db.contracts.find_one({"id": contract_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    
+    update_data = contract_data.model_dump()
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    update_data['start_date'] = update_data['start_date'].isoformat()
+    update_data['end_date'] = update_data['end_date'].isoformat()
+    
+    await db.contracts.update_one({"id": contract_id}, {"$set": update_data})
+    
+    contract = await db.contracts.find_one({"id": contract_id}, {"_id": 0})
+    contract['start_date'] = datetime.fromisoformat(contract['start_date'])
+    contract['end_date'] = datetime.fromisoformat(contract['end_date'])
+    contract['created_at'] = datetime.fromisoformat(contract['created_at'])
+    contract['updated_at'] = datetime.fromisoformat(contract['updated_at'])
+    return Contract(**contract)
+
+@api_router.get("/contracts/client/{client_id}")
+async def get_client_contracts(client_id: str, current_user: User = Depends(get_current_user)):
+    contracts = await db.contracts.find({"client_id": client_id}, {"_id": 0}).to_list(100)
+    for c in contracts:
+        c['start_date'] = datetime.fromisoformat(c['start_date']) if isinstance(c['start_date'], str) else c['start_date']
+        c['end_date'] = datetime.fromisoformat(c['end_date']) if isinstance(c['end_date'], str) else c['end_date']
+        c['created_at'] = datetime.fromisoformat(c['created_at']) if isinstance(c['created_at'], str) else c['created_at']
+        c['updated_at'] = datetime.fromisoformat(c['updated_at']) if isinstance(c['updated_at'], str) else c['updated_at']
+    return contracts
+
+@api_router.get("/contracts/client/{client_id}/active")
+async def get_active_contract(client_id: str, current_user: User = Depends(get_current_user)):
+    now = datetime.now(timezone.utc)
+    contract = await db.contracts.find_one({
+        "client_id": client_id,
+        "is_active": True,
+        "start_date": {"$lte": now.isoformat()},
+        "end_date": {"$gte": now.isoformat()}
+    }, {"_id": 0})
+    
+    if not contract:
+        return {"message": "No active contract found", "contract": None}
+    
+    contract['start_date'] = datetime.fromisoformat(contract['start_date'])
+    contract['end_date'] = datetime.fromisoformat(contract['end_date'])
+    contract['created_at'] = datetime.fromisoformat(contract['created_at'])
+    contract['updated_at'] = datetime.fromisoformat(contract['updated_at'])
+    return {"contract": Contract(**contract)}
+
+# ==================== DUTY SLIP API ENDPOINTS ====================
+
+@api_router.get("/duty-slips", response_model=List[DutySlip])
+async def get_duty_slips(
+    client_id: Optional[str] = None,
+    driver_id: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    query = {}
+    if client_id:
+        query["client_id"] = client_id
+    if driver_id:
+        query["driver_id"] = driver_id
+    if date_from:
+        query["date"] = {"$gte": date_from}
+    if date_to:
+        if "date" in query:
+            query["date"]["$lte"] = date_to
+        else:
+            query["date"] = {"$lte": date_to}
+    
+    duty_slips = await db.duty_slips.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    for ds in duty_slips:
+        ds['date'] = datetime.fromisoformat(ds['date']) if isinstance(ds['date'], str) else ds['date']
+        if ds.get('start_time'):
+            ds['start_time'] = datetime.fromisoformat(ds['start_time']) if isinstance(ds['start_time'], str) else ds['start_time']
+        if ds.get('end_time'):
+            ds['end_time'] = datetime.fromisoformat(ds['end_time']) if isinstance(ds['end_time'], str) else ds['end_time']
+        if ds.get('signed_at'):
+            ds['signed_at'] = datetime.fromisoformat(ds['signed_at']) if isinstance(ds['signed_at'], str) else ds['signed_at']
+        ds['created_at'] = datetime.fromisoformat(ds['created_at']) if isinstance(ds['created_at'], str) else ds['created_at']
+        ds['updated_at'] = datetime.fromisoformat(ds['updated_at']) if isinstance(ds['updated_at'], str) else ds['updated_at']
+    return duty_slips
+
+@api_router.post("/duty-slips", response_model=DutySlip)
+async def create_duty_slip(slip_data: DutySlipCreate, current_user: User = Depends(get_current_user)):
+    # Get trip details
+    trip = await db.duties.find_one({"id": slip_data.trip_id}, {"_id": 0})
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    
+    # Check if duty slip already exists for this trip
+    existing = await db.duty_slips.find_one({"trip_id": slip_data.trip_id}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Duty slip already exists for this trip")
+    
+    # Get driver and vehicle details
+    driver = await db.drivers.find_one({"id": trip.get('driver_id')}, {"_id": 0})
+    vehicle = await db.vehicles.find_one({"id": trip.get('vehicle_id')}, {"_id": 0})
+    client = await db.clients.find_one({"id": trip.get('client_id')}, {"_id": 0})
+    
+    if not driver or not vehicle:
+        raise HTTPException(status_code=400, detail="Trip must be assigned to driver and vehicle before creating duty slip")
+    
+    # Build passenger list
+    passengers = [{"name": trip.get('passenger_name'), "phone": trip.get('passenger_phone')}]
+    for emp_id in trip.get('passengers', []):
+        emp = await db.employees.find_one({"id": emp_id}, {"_id": 0})
+        if emp:
+            passengers.append({"name": emp['name'], "phone": emp['phone']})
+    
+    duty_slip = DutySlip(
+        id=slip_data.trip_id,  # Use trip ID as duty slip ID
+        trip_id=slip_data.trip_id,
+        client_id=trip.get('client_id'),
+        date=datetime.fromisoformat(trip['pickup_time']) if isinstance(trip['pickup_time'], str) else trip['pickup_time'],
+        start_time=datetime.now(timezone.utc),
+        trip_type=trip.get('trip_type', TripType.ONE_WAY),
+        driver_id=driver['id'],
+        driver_name=driver['name'],
+        vehicle_id=vehicle['id'],
+        vehicle_number=vehicle['registration_number'],
+        vehicle_type=vehicle['vehicle_type'],
+        corporate_name=client['company_name'] if client else "Unknown",
+        pickup_location=trip['pickup_location'],
+        dropoff_location=trip['dropoff_location'],
+        opening_km=slip_data.opening_km,
+        passenger_name=trip.get('passenger_name'),
+        passengers=passengers,
+        driver_remarks=slip_data.driver_remarks
     )
+    
+    doc = duty_slip.model_dump()
+    doc['date'] = doc['date'].isoformat()
+    doc['start_time'] = doc['start_time'].isoformat() if doc.get('start_time') else None
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    
+    await db.duty_slips.insert_one(doc)
+    
+    # Link duty slip to trip
+    await db.duties.update_one(
+        {"id": slip_data.trip_id},
+        {"$set": {"duty_slip_id": duty_slip.id, "status": TripStatus.STARTED}}
+    )
+    
+    return duty_slip
+
+@api_router.get("/duty-slips/{slip_id}", response_model=DutySlip)
+async def get_duty_slip(slip_id: str, current_user: User = Depends(get_current_user)):
+    ds = await db.duty_slips.find_one({"id": slip_id}, {"_id": 0})
+    if not ds:
+        raise HTTPException(status_code=404, detail="Duty slip not found")
+    
+    ds['date'] = datetime.fromisoformat(ds['date']) if isinstance(ds['date'], str) else ds['date']
+    if ds.get('start_time'):
+        ds['start_time'] = datetime.fromisoformat(ds['start_time']) if isinstance(ds['start_time'], str) else ds['start_time']
+    if ds.get('end_time'):
+        ds['end_time'] = datetime.fromisoformat(ds['end_time']) if isinstance(ds['end_time'], str) else ds['end_time']
+    if ds.get('signed_at'):
+        ds['signed_at'] = datetime.fromisoformat(ds['signed_at']) if isinstance(ds['signed_at'], str) else ds['signed_at']
+    ds['created_at'] = datetime.fromisoformat(ds['created_at']) if isinstance(ds['created_at'], str) else ds['created_at']
+    ds['updated_at'] = datetime.fromisoformat(ds['updated_at']) if isinstance(ds['updated_at'], str) else ds['updated_at']
+    
+    return DutySlip(**ds)
+
+@api_router.patch("/duty-slips/{slip_id}/complete")
+async def complete_duty_slip(slip_id: str, complete_data: DutySlipComplete, current_user: User = Depends(get_current_user)):
+    ds = await db.duty_slips.find_one({"id": slip_id}, {"_id": 0})
+    if not ds:
+        raise HTTPException(status_code=404, detail="Duty slip not found")
+    
+    if ds.get('status') == DutySlipStatus.SIGNED:
+        raise HTTPException(status_code=400, detail="Cannot modify signed duty slip")
+    
+    # Calculate total KM
+    opening_km = ds.get('opening_km', 0)
+    total_km = complete_data.closing_km - opening_km
+    
+    await db.duty_slips.update_one(
+        {"id": slip_id},
+        {"$set": {
+            "closing_km": complete_data.closing_km,
+            "total_km": total_km,
+            "end_time": datetime.now(timezone.utc).isoformat(),
+            "driver_remarks": complete_data.driver_remarks or ds.get('driver_remarks'),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "Duty slip completed", "total_km": total_km}
+
+@api_router.patch("/duty-slips/{slip_id}/sign")
+async def sign_duty_slip(slip_id: str, sign_data: DutySlipSign, current_user: User = Depends(get_current_user)):
+    ds = await db.duty_slips.find_one({"id": slip_id}, {"_id": 0})
+    if not ds:
+        raise HTTPException(status_code=404, detail="Duty slip not found")
+    
+    if ds.get('status') == DutySlipStatus.SIGNED:
+        raise HTTPException(status_code=400, detail="Duty slip already signed")
+    
+    if not ds.get('closing_km'):
+        raise HTTPException(status_code=400, detail="Complete duty slip with closing KM before signing")
+    
+    # Lock the duty slip
+    await db.duty_slips.update_one(
+        {"id": slip_id},
+        {"$set": {
+            "status": DutySlipStatus.SIGNED,
+            "passenger_signature": sign_data.passenger_signature,
+            "signed_by": sign_data.signed_by,
+            "signed_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Mark trip as completed
+    await db.duties.update_one(
+        {"id": ds['trip_id']},
+        {"$set": {"status": TripStatus.COMPLETED, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": "Duty slip signed and locked"}
+
+@api_router.get("/duty-slips/trip/{trip_id}")
+async def get_duty_slip_by_trip(trip_id: str, current_user: User = Depends(get_current_user)):
+    ds = await db.duty_slips.find_one({"trip_id": trip_id}, {"_id": 0})
+    if not ds:
+        return {"duty_slip": None}
+    
+    ds['date'] = datetime.fromisoformat(ds['date']) if isinstance(ds['date'], str) else ds['date']
+    if ds.get('start_time'):
+        ds['start_time'] = datetime.fromisoformat(ds['start_time']) if isinstance(ds['start_time'], str) else ds['start_time']
+    if ds.get('end_time'):
+        ds['end_time'] = datetime.fromisoformat(ds['end_time']) if isinstance(ds['end_time'], str) else ds['end_time']
+    if ds.get('signed_at'):
+        ds['signed_at'] = datetime.fromisoformat(ds['signed_at']) if isinstance(ds['signed_at'], str) else ds['signed_at']
+    ds['created_at'] = datetime.fromisoformat(ds['created_at']) if isinstance(ds['created_at'], str) else ds['created_at']
+    ds['updated_at'] = datetime.fromisoformat(ds['updated_at']) if isinstance(ds['updated_at'], str) else ds['updated_at']
+    
+    return {"duty_slip": DutySlip(**ds)}
+
+# Generate Invoice from Duty Slips (1-click)
+@api_router.post("/invoices/generate-from-slips")
+async def generate_invoice_from_slips(
+    client_id: str,
+    billing_period_start: datetime,
+    billing_period_end: datetime,
+    extra_charges: Optional[List[dict]] = None,
+    gst_percentage: float = 18.0,
+    due_days: int = 30,
+    current_user: User = Depends(get_current_user)
+):
+    # Find all signed duty slips for this client in the billing period
+    duty_slips = await db.duty_slips.find({
+        "client_id": client_id,
+        "status": DutySlipStatus.SIGNED,
+        "date": {
+            "$gte": billing_period_start.isoformat(),
+            "$lte": billing_period_end.isoformat()
+        }
+    }, {"_id": 0}).to_list(1000)
+    
+    if not duty_slips:
+        raise HTTPException(status_code=400, detail="No signed duty slips found for this period")
+    
+    duty_slip_ids = [ds['id'] for ds in duty_slips]
+    
+    # Get active contract for client
+    contract = await db.contracts.find_one({
+        "client_id": client_id,
+        "is_active": True,
+        "start_date": {"$lte": billing_period_end.isoformat()},
+        "end_date": {"$gte": billing_period_start.isoformat()}
+    }, {"_id": 0})
+    
+    contract_id = contract['id'] if contract else None
+    
+    # Create invoice
+    invoice_data = InvoiceCreate(
+        client_id=client_id,
+        contract_id=contract_id,
+        duty_slip_ids=duty_slip_ids,
+        billing_period_start=billing_period_start,
+        billing_period_end=billing_period_end,
+        extra_charges=extra_charges or [],
+        gst_percentage=gst_percentage,
+        due_days=due_days
+    )
+    
+    return await create_invoice(invoice_data, current_user)
     
     return invoice
 
@@ -1597,6 +2315,119 @@ async def bulk_create_bookings(bookings_data: List[BookingCreate], current_user:
         "failed": len(errors),
         "errors": errors
     }
+
+# Corporate Duty Slips (Read-Only)
+@api_router.get("/corporate/duty-slips")
+async def get_corporate_duty_slips(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    current_user: CorporateUser = Depends(get_current_corporate_user)
+):
+    query = {"client_id": current_user.client_id}
+    if date_from:
+        query["date"] = {"$gte": date_from}
+    if date_to:
+        if "date" in query:
+            query["date"]["$lte"] = date_to
+        else:
+            query["date"] = {"$lte": date_to}
+    
+    duty_slips = await db.duty_slips.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    for ds in duty_slips:
+        ds['date'] = datetime.fromisoformat(ds['date']) if isinstance(ds['date'], str) else ds['date']
+        if ds.get('start_time'):
+            ds['start_time'] = datetime.fromisoformat(ds['start_time']) if isinstance(ds['start_time'], str) else ds['start_time']
+        if ds.get('end_time'):
+            ds['end_time'] = datetime.fromisoformat(ds['end_time']) if isinstance(ds['end_time'], str) else ds['end_time']
+        if ds.get('signed_at'):
+            ds['signed_at'] = datetime.fromisoformat(ds['signed_at']) if isinstance(ds['signed_at'], str) else ds['signed_at']
+        ds['created_at'] = datetime.fromisoformat(ds['created_at']) if isinstance(ds['created_at'], str) else ds['created_at']
+        ds['updated_at'] = datetime.fromisoformat(ds['updated_at']) if isinstance(ds['updated_at'], str) else ds['updated_at']
+    return duty_slips
+
+@api_router.get("/corporate/duty-slips/{slip_id}")
+async def get_corporate_duty_slip(slip_id: str, current_user: CorporateUser = Depends(get_current_corporate_user)):
+    ds = await db.duty_slips.find_one({"id": slip_id, "client_id": current_user.client_id}, {"_id": 0})
+    if not ds:
+        raise HTTPException(status_code=404, detail="Duty slip not found")
+    
+    ds['date'] = datetime.fromisoformat(ds['date']) if isinstance(ds['date'], str) else ds['date']
+    if ds.get('start_time'):
+        ds['start_time'] = datetime.fromisoformat(ds['start_time']) if isinstance(ds['start_time'], str) else ds['start_time']
+    if ds.get('end_time'):
+        ds['end_time'] = datetime.fromisoformat(ds['end_time']) if isinstance(ds['end_time'], str) else ds['end_time']
+    if ds.get('signed_at'):
+        ds['signed_at'] = datetime.fromisoformat(ds['signed_at']) if isinstance(ds['signed_at'], str) else ds['signed_at']
+    ds['created_at'] = datetime.fromisoformat(ds['created_at']) if isinstance(ds['created_at'], str) else ds['created_at']
+    ds['updated_at'] = datetime.fromisoformat(ds['updated_at']) if isinstance(ds['updated_at'], str) else ds['updated_at']
+    
+    return ds
+
+# Corporate Monthly Summary
+@api_router.get("/corporate/monthly-summary")
+async def get_corporate_monthly_summary(
+    year: int,
+    month: int,
+    current_user: CorporateUser = Depends(get_current_corporate_user)
+):
+    from calendar import monthrange
+    
+    start_date = datetime(year, month, 1, tzinfo=timezone.utc)
+    last_day = monthrange(year, month)[1]
+    end_date = datetime(year, month, last_day, 23, 59, 59, tzinfo=timezone.utc)
+    
+    # Get duty slips for the month
+    duty_slips = await db.duty_slips.find({
+        "client_id": current_user.client_id,
+        "date": {
+            "$gte": start_date.isoformat(),
+            "$lte": end_date.isoformat()
+        }
+    }, {"_id": 0}).to_list(1000)
+    
+    total_trips = len(duty_slips)
+    total_km = sum(ds.get('total_km', 0) or 0 for ds in duty_slips)
+    signed_trips = len([ds for ds in duty_slips if ds.get('status') == DutySlipStatus.SIGNED])
+    
+    # Get invoices for the month
+    invoices = await db.invoices.find({
+        "client_id": current_user.client_id,
+        "billing_period_start": {"$lte": end_date.isoformat()},
+        "billing_period_end": {"$gte": start_date.isoformat()}
+    }, {"_id": 0}).to_list(100)
+    
+    total_payable = sum(inv.get('total_amount', 0) for inv in invoices)
+    
+    return {
+        "year": year,
+        "month": month,
+        "total_trips": total_trips,
+        "signed_trips": signed_trips,
+        "total_km": total_km,
+        "total_payable": total_payable,
+        "invoices_count": len(invoices)
+    }
+
+# Corporate Contract View
+@api_router.get("/corporate/contract")
+async def get_corporate_contract(current_user: CorporateUser = Depends(get_current_corporate_user)):
+    now = datetime.now(timezone.utc)
+    contract = await db.contracts.find_one({
+        "client_id": current_user.client_id,
+        "is_active": True,
+        "start_date": {"$lte": now.isoformat()},
+        "end_date": {"$gte": now.isoformat()}
+    }, {"_id": 0})
+    
+    if not contract:
+        return {"message": "No active contract", "contract": None}
+    
+    contract['start_date'] = datetime.fromisoformat(contract['start_date'])
+    contract['end_date'] = datetime.fromisoformat(contract['end_date'])
+    contract['created_at'] = datetime.fromisoformat(contract['created_at'])
+    contract['updated_at'] = datetime.fromisoformat(contract['updated_at'])
+    
+    return {"contract": contract}
 
 # Include router
 app.include_router(api_router)

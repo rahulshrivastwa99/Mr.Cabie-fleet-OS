@@ -9,7 +9,8 @@ import {
   Receipt,
   ChartBar,
   SignOut,
-  UserCircle
+  UserCircle,
+  FileText
 } from '@phosphor-icons/react';
 
 const CorporateLayout = () => {
@@ -24,6 +25,7 @@ const CorporateLayout = () => {
   const navItems = [
     { path: '/corporate', icon: Gauge, label: 'Dashboard', exact: true },
     { path: '/corporate/bookings', icon: Calendar, label: 'Bookings' },
+    { path: '/corporate/duty-slips', icon: FileText, label: 'Duty Slips' },
     { path: '/corporate/employees', icon: Users, label: 'Employees', roles: ['ADMIN', 'HR'] },
     { path: '/corporate/tracking', icon: MapPin, label: 'Live Tracking' },
     { path: '/corporate/invoices', icon: Receipt, label: 'Invoices' },
