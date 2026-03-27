@@ -7,8 +7,13 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 3. **Driver Mobile App** (Planned - Android/Flutter)
 4. **Passenger Mobile App** (Planned - Android/iOS)
 
+## Core Architecture
+- **One Booking → Multiple Trips** (for recurring bookings)
+- **One Trip → One Duty Slip** (STRICT 1:1 relationship)
+- **Multiple Duty Slips → One Invoice** (based on billing cycle)
+
 ## User Personas
-- **Fleet Admin** - Manages vehicles, drivers, duties, billing
+- **Fleet Admin** - Manages vehicles, drivers, trips, contracts, billing
 - **Corporate HR/Admin** - Creates bookings for employees
 - **Corporate Finance** - Views invoices and billing
 - **Driver** (Future) - Accepts duties, navigation, trip management
@@ -24,75 +29,78 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 - Driver CRUD with license, contact details
 - Driver status tracking and availability
 
-### 3. Duty/Trip Management (COMPLETE)
+### 3. Trip Management (COMPLETE - Renamed from Duty)
 - **Strict State Machine**: CREATED → ASSIGNED → ACCEPTED → STARTED → COMPLETED → BILLED → CLOSED
 - Manual driver/vehicle assignment by admin
-- Duty links to bookings automatically
+- Trip links to bookings and contracts
 
-### 4. Billing & Invoicing (COMPLETE)
-- Invoice generation with line items
-- GST calculation support
+### 4. Duty Slip System (COMPLETE - NEW)
+- **1:1 relationship with Trip** - Each trip generates exactly one duty slip
+- **Meter Reading**: Opening KM, Closing KM, Total KM (auto-calculated)
+- **Digital Signature**: Canvas-based signature capture (mandatory)
+- **Status Flow**: DRAFT → SIGNED (locked after signature)
+- **Important Note**: "Additional charges (Toll, Parking, Taxes, GST) will be added in final invoice"
+- Admin: Full access, filters by date/client/driver
+- Corporate: Read-only view, download PDF
+
+### 5. Contract Management (COMPLETE - NEW)
+- **Contract Types**:
+  - FIXED_MONTHLY: Fixed monthly amount with optional included days/KM
+  - PER_KM: Rate per kilometer with optional minimum KM/day
+  - PER_DAY: Daily rate billing
+  - PACKAGE: e.g., 8hr/80km with extra hour/km rates
+  - ROUTE_BASED: Fixed pricing for specific routes
+  - HYBRID: Base monthly amount + usage rate per KM
+- **Billing Cycle**: Weekly, Bi-Weekly, Monthly
+- **Contract Period**: Start date, End date, Active status
+
+### 6. Billing & Invoicing (COMPLETE - UPGRADED)
+- **Invoice Generation from Duty Slips** (1-click)
+- **Contract-based pricing calculation**:
+  - Fetches duty slips for billing period
+  - Applies contract pricing logic
+  - Calculates base amount + extra charges
+- **Extra Charges** (Admin only): Toll, Parking, Driver Allowance, Night Charges, GST
 - Invoice status tracking (DRAFT, SENT, PAID, OVERDUE, CANCELLED)
 
-### 5. Pricing Engine (COMPLETE)
-- **Services**: Configurable service types (Airport Transfer, Local Duty, Outstation, etc.)
-- **Pricing Rules**: Multiple pricing types
-  - PER_KM: Rate per km with minimum km
-  - TIME_BASED: Package hours/km with base fare
-  - ROUTE_BASED: Fixed pricing for specific routes
-  - DAILY_RENTAL: Daily rate with included km/hours
-- **Rate Cards**: Client-specific pricing configuration
-
-### 6. Corporate Customer Dashboard (COMPLETE)
+### 7. Corporate Customer Dashboard (COMPLETE - UPGRADED)
 - **Authentication**: Role-based (ADMIN, HR, FINANCE, VIEWER)
 - **Employee Management**: CRUD with cost center assignment
-- **Bookings**: 
-  - Trip Type: One-way / Round-trip
-  - Recurring Booking: Daily / Weekly / Monthly
-  - Vehicle Preference: SEDAN, SUV, HATCHBACK, EV, LUXURY
-  - Service Type selection
-  - Multi-Employee booking
-  - Real-time pricing estimate
-- **Invoices**: View and download
-- **Reports**: Monthly expense summaries
+- **Bookings**: Trip Type, Recurring, Vehicle Preference, Multi-Employee
+- **Duty Slips View**: Read-only access to all company duty slips
+- **Monthly Summary**: Total trips, signed slips, total KM, total payable
+- **Active Contract View**: Current contract details
+- **Invoices**: View with breakdown
 
-### 7. Live Tracking (MOCKED)
+### 8. Live Tracking (MOCKED)
 - Requires Google Maps API integration
 
-### 8. Notifications (MOCKED)
+### 9. Notifications (MOCKED)
 - Requires Firebase/Twilio integration
 
 ---
 
 ## Completed Work (as of Dec 27, 2025)
 
-### Session 1 - Base Architecture
+### Session 1-3: Base Architecture & Core Features
 - FastAPI backend with MongoDB
 - React frontend with Tailwind CSS + shadcn/ui
-- JWT authentication for both Admin and Corporate users
+- Admin Panel: Fleet, Driver, Client, Billing management
+- Corporate Dashboard: Bookings, Employees, Tracking, Invoices, Reports
 
-### Session 2 - Admin Panel
-- Dashboard with stats
-- Fleet, Driver, Duty, Client, Billing management
-- CSV bulk upload components
+### Session 4: Pricing Engine & Booking Upgrades
+- Services, Pricing Rules, Rate Cards
+- Corporate Booking Form with all advanced options
+- Dynamic pricing calculation
 
-### Session 3 - Corporate Dashboard
-- Corporate login and auth context
-- Bookings, Employees, Tracking, Invoices, Reports pages
-- Booking → Duty auto-creation
-
-### Session 4 - Pricing Engine & Booking Upgrades
-- Services Management (Admin)
-- Pricing Rules with 4 pricing types
-- Rate Cards with client assignment
-- Corporate Booking Form upgraded with:
-  - Trip Type selection
-  - Vehicle Preference
-  - Service Type
-  - Recurring booking options
-  - Multi-employee passenger selection
-  - Real-time pricing estimate display
-- Dynamic pricing calculation on booking creation
+### Session 5: Duty Slip System + Contract-Based Billing (CURRENT)
+- **Trip Model** (renamed from Duty) with contract_id and duty_slip_id
+- **DutySlip Model** with KM tracking, signature, status
+- **Contract Model** with 6 pricing types
+- **Invoice Model** upgraded with duty_slip_ids, extra_charges, billing_period
+- **Admin Pages**: TripManagement, DutySlips, ContractManagement
+- **Corporate Pages**: CorporateDutySlips with monthly summary
+- **APIs**: Full CRUD for contracts, duty slips, invoice generation
 
 ---
 
@@ -100,8 +108,9 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 1. **Driver Mobile App (Flutter/Android)**
    - Secure login
    - Duty list and accept/reject
-   - Navigation integration
-   - Start/end trip functionality
+   - Duty Slip creation (opening KM entry)
+   - Trip completion (closing KM entry)
+   - Signature capture from passenger
    - Real-time location sharing
 
 2. **Passenger Mobile App (Flutter/iOS + Android)**
@@ -109,6 +118,7 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
    - Live tracking
    - SOS feature
    - Push notifications
+   - Sign duty slip digitally
 
 3. **Real Notifications Integration**
    - Firebase Cloud Messaging
@@ -117,18 +127,9 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 ---
 
 ## Future Tasks (P2 - Backlog)
-1. **Auto Assignment Engine**
-   - Driver proximity-based assignment
-   - Smart dispatch suggestions
-
-2. **Deep Analytics**
-   - Fleet utilization reports
-   - Driver performance metrics
-   - Cost analysis dashboards
-
-3. **Backend Refactoring**
-   - Split server.py into modular routers
-   - Separate models, routes, services
+1. **Auto Assignment Engine** - Proximity-based driver assignment
+2. **Deep Analytics** - Fleet utilization, driver performance, cost analysis
+3. **Backend Refactoring** - Split server.py into modular routers
 
 ---
 
@@ -141,7 +142,7 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 - **Frontend**: React 18, Tailwind CSS, shadcn/ui
 - **Mobile (Planned)**: Flutter
 
-## API Base URLs
-- Admin API: `/api/*`
-- Corporate API: `/api/corporate/*`
-- Pricing API: `/api/services`, `/api/pricing-rules`, `/api/rate-cards`
+## Key API Endpoints
+- Admin: `/api/trips`, `/api/duty-slips`, `/api/contracts`, `/api/invoices`
+- Corporate: `/api/corporate/duty-slips`, `/api/corporate/monthly-summary`, `/api/corporate/contract`
+- Invoice Generation: `/api/invoices/generate-from-slips`
