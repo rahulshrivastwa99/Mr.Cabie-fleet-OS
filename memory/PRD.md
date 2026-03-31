@@ -43,7 +43,8 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 - Admin: Full access, filters by date/client/driver
 - Corporate: Read-only view, download PDF
 
-### 5. Contract Management (COMPLETE - NEW)
+### 5. Contract Management (COMPLETE - UPGRADED)
+- **Multiple Contracts per Client** - Clients can have multiple active contracts
 - **Contract Types**:
   - FIXED_MONTHLY: Fixed monthly amount with optional included days/KM
   - PER_KM: Rate per kilometer with optional minimum KM/day
@@ -51,22 +52,32 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
   - PACKAGE: e.g., 8hr/80km with extra hour/km rates
   - ROUTE_BASED: Fixed pricing for specific routes
   - HYBRID: Base monthly amount + usage rate per KM
+- **Admin selects contract when assigning trip** (not during booking)
+- **Default/Fallback Rates** for on-call trips without contract
 - **Billing Cycle**: Weekly, Bi-Weekly, Monthly
-- **Contract Period**: Start date, End date, Active status
 
 ### 6. Billing & Invoicing (COMPLETE - UPGRADED)
-- **Invoice Generation from Duty Slips** (1-click)
-- **Contract-based pricing calculation**:
-  - Fetches duty slips for billing period
-  - Applies contract pricing logic
-  - Calculates base amount + extra charges
-- **Extra Charges** (Admin only): Toll, Parking, Driver Allowance, Night Charges, GST
-- Invoice status tracking (DRAFT, SENT, PAID, OVERDUE, CANCELLED)
+- **Invoice Generation from Duty Slips**:
+  - Select client and view unbilled (signed) duty slips
+  - Select which duty slips to include
+  - Optionally select contract for pricing calculation
+  - Add extra charges (Toll, Parking, Night charges, Driver allowance)
+  - Configure GST % and payment due days
+- **Invoice Editing** - Admin can edit at any time:
+  - Line items (descriptions, amounts)
+  - Extra charges (add/remove)
+  - GST percentage
+  - Auto-recalculates totals
+- **Duty Slip Reconciliation** - Invoices show:
+  - Duty slip IDs for easy matching
+  - KM breakdown per slip
+  - Billing period dates
 
 ### 7. Corporate Customer Dashboard (COMPLETE - UPGRADED)
 - **Authentication**: Role-based (ADMIN, HR, FINANCE, VIEWER)
 - **Employee Management**: CRUD with cost center assignment
 - **Bookings**: Trip Type, Recurring, Vehicle Preference, Multi-Employee
+  - **No estimated fare shown** (per business requirement)
 - **Duty Slips View**: Read-only access to all company duty slips
 - **Monthly Summary**: Total trips, signed slips, total KM, total payable
 - **Active Contract View**: Current contract details
