@@ -50,8 +50,6 @@ const CorporateBookings = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const [pricingEstimate, setPricingEstimate] = useState(null);
-  const [estimatingPrice, setEstimatingPrice] = useState(false);
   const [formData, setFormData] = useState({
     employee_id: '',
     pickup_location: '',
@@ -70,33 +68,6 @@ const CorporateBookings = () => {
     service_type: '',
     passengers: [] // Additional employees for multi-employee booking
   });
-
-  // Fetch pricing estimate when relevant fields change
-  useEffect(() => {
-    const fetchPricingEstimate = async () => {
-      if (formData.pickup_location && formData.dropoff_location && formData.vehicle_type_requested) {
-        setEstimatingPrice(true);
-        try {
-          const response = await axios.post(`${API_BASE}/estimate-pricing`, {
-            pickup_location: formData.pickup_location,
-            dropoff_location: formData.dropoff_location,
-            trip_type: formData.trip_type,
-            vehicle_type_requested: formData.vehicle_type_requested
-          });
-          setPricingEstimate(response.data);
-        } catch (error) {
-          setPricingEstimate(null);
-        } finally {
-          setEstimatingPrice(false);
-        }
-      } else {
-        setPricingEstimate(null);
-      }
-    };
-
-    const debounceTimer = setTimeout(fetchPricingEstimate, 500);
-    return () => clearTimeout(debounceTimer);
-  }, [formData.pickup_location, formData.dropoff_location, formData.trip_type, formData.vehicle_type_requested]);
 
   useEffect(() => {
     fetchData();
@@ -135,7 +106,6 @@ const CorporateBookings = () => {
       service_type: '',
       passengers: []
     });
-    setPricingEstimate(null);
   };
 
   const handleSubmit = async (e) => {
@@ -365,12 +335,6 @@ const CorporateBookings = () => {
                       <p className="text-sm">{booking.passengers.length + 1} people</p>
                     </div>
                   )}
-                  {booking.estimated_cost && (
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-widest text-[#525252] mb-1">Est. Cost</p>
-                      <p className="text-sm font-semibold text-[#0047FF]">₹{booking.estimated_cost.toFixed(2)}</p>
-                    </div>
-                  )}
                 </div>
               </div>
             );
@@ -450,34 +414,6 @@ const CorporateBookings = () => {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Pricing Estimate Display */}
-            {(pricingEstimate || estimatingPrice) && (
-              <div className="p-4 bg-[#E6EFFF] border border-[#0047FF] rounded-sm" data-testid="pricing-estimate">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-1">
-                      Estimated Cost
-                    </p>
-                    {estimatingPrice ? (
-                      <p className="text-sm text-[#525252]">Calculating...</p>
-                    ) : pricingEstimate?.estimated_cost ? (
-                      <>
-                        <p className="text-2xl font-bold text-[#0047FF]">₹{pricingEstimate.estimated_cost.toFixed(2)}</p>
-                        <p className="text-xs text-[#525252] mt-1">{pricingEstimate.message}</p>
-                      </>
-                    ) : (
-                      <p className="text-sm text-[#525252]">{pricingEstimate?.message || 'Enter pickup, dropoff & vehicle type'}</p>
-                    )}
-                  </div>
-                  {pricingEstimate?.pricing_type && (
-                    <span className="text-xs px-2 py-1 bg-white text-[#0047FF] font-semibold">
-                      {pricingEstimate.pricing_type.replace('_', ' ')}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
 
             {/* Location Fields */}
             <div className="grid grid-cols-2 gap-4">

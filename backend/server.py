@@ -251,6 +251,7 @@ DutyCreate = TripCreate
 class TripAssign(BaseModel):
     vehicle_id: str
     driver_id: str
+    contract_id: Optional[str] = None  # Admin selects contract when assigning
 
 # Alias for backward compatibility
 DutyAssign = TripAssign
@@ -941,16 +942,23 @@ async def assign_duty(duty_id: str, assign_data: DutyAssign, current_user: User 
     if not driver or driver['status'] != DriverStatus.AVAILABLE:
         raise HTTPException(status_code=400, detail="Driver not available")
     
-    # Update duty
-    await db.duties.update_one(
-        {"id": duty_id},
-        {"$set": {
-            "vehicle_id": assign_data.vehicle_id,
-            "driver_id": assign_data.driver_id,
-            "status": DutyStatus.ASSIGNED,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
+    # Validate contract if provided
+    if assign_data.contract_id:
+        contract = await db.contracts.find_one({"id": assign_data.contract_id}, {"_id": 0})
+        if not contract:
+            raise HTTPException(status_code=400, detail="Contract not found")
+    
+    # Update duty with contract
+    update_data = {
+        "vehicle_id": assign_data.vehicle_id,
+        "driver_id": assign_data.driver_id,
+        "status": DutyStatus.ASSIGNED,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    if assign_data.contract_id:
+        update_data["contract_id"] = assign_data.contract_id
+    
+    await db.duties.update_one({"id": duty_id}, {"$set": update_data})
     
     # Update vehicle and driver status
     await db.vehicles.update_one({"id": assign_data.vehicle_id}, {"$set": {"status": VehicleStatus.ON_DUTY}})
@@ -1195,6 +1203,112 @@ async def create_invoice(invoice_data: InvoiceCreate, current_user: User = Depen
         )
     
     return invoice
+
+# Invoice Update Endpoint - Admin can edit line items, rates, extra charges
+class InvoiceUpdate(BaseModel):
+    line_items: Optional[List[dict]] = None
+    extra_charges: Optional[List[dict]] = None
+    gst_percentage: Optional[float] = None
+    status: Optional[InvoiceStatus] = None
+    notes: Optional[str] = None
+
+@api_router.put("/invoices/{invoice_id}")
+async def update_invoice(invoice_id: str, update_data: InvoiceUpdate, current_user: User = Depends(get_current_user)):
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    update_fields = {}
+    
+    if update_data.line_items is not None:
+        update_fields['line_items'] = update_data.line_items
+        # Recalculate base amount from line items
+        base_amount = sum(item.get('amount', 0) for item in update_data.line_items)
+        update_fields['base_amount'] = base_amount
+    else:
+        base_amount = invoice.get('base_amount', 0)
+    
+    if update_data.extra_charges is not None:
+        update_fields['extra_charges'] = update_data.extra_charges
+        extra_charges_amount = sum(ec.get('amount', 0) for ec in update_data.extra_charges)
+        update_fields['extra_charges_amount'] = extra_charges_amount
+    else:
+        extra_charges_amount = invoice.get('extra_charges_amount', 0)
+    
+    gst_percentage = update_data.gst_percentage if update_data.gst_percentage is not None else invoice.get('gst_percentage', 18.0)
+    if update_data.gst_percentage is not None:
+        update_fields['gst_percentage'] = gst_percentage
+    
+    # Recalculate totals
+    subtotal = base_amount + extra_charges_amount
+    gst_amount = subtotal * (gst_percentage / 100)
+    total_amount = subtotal + gst_amount
+    
+    update_fields['subtotal'] = subtotal
+    update_fields['amount'] = subtotal
+    update_fields['gst_amount'] = gst_amount
+    update_fields['total_amount'] = total_amount
+    update_fields['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    if update_data.status is not None:
+        update_fields['status'] = update_data.status
+    
+    if update_data.notes is not None:
+        update_fields['notes'] = update_data.notes
+    
+    await db.invoices.update_one({"id": invoice_id}, {"$set": update_fields})
+    
+    updated_invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    return updated_invoice
+
+@api_router.get("/invoices/{invoice_id}")
+async def get_invoice(invoice_id: str, current_user: User = Depends(get_current_user)):
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    # Fetch duty slip details for reconciliation
+    if invoice.get('duty_slip_ids'):
+        duty_slips = await db.duty_slips.find(
+            {"id": {"$in": invoice['duty_slip_ids']}},
+            {"_id": 0}
+        ).to_list(1000)
+        invoice['duty_slips_detail'] = duty_slips
+    
+    # Fetch client details
+    client = await db.clients.find_one({"id": invoice['client_id']}, {"_id": 0})
+    invoice['client_detail'] = client
+    
+    # Fetch contract details
+    if invoice.get('contract_id'):
+        contract = await db.contracts.find_one({"id": invoice['contract_id']}, {"_id": 0})
+        invoice['contract_detail'] = contract
+    
+    return invoice
+
+# Default/Fallback Rates Configuration
+class DefaultRates(BaseModel):
+    rate_per_km: float = 15.0  # Default fallback rate
+    minimum_km: float = 25.0
+    night_charge_percentage: float = 25.0
+    waiting_charge_per_hour: float = 100.0
+
+@api_router.get("/settings/default-rates")
+async def get_default_rates(current_user: User = Depends(get_current_user)):
+    rates = await db.settings.find_one({"key": "default_rates"}, {"_id": 0})
+    if not rates:
+        # Return default values
+        return DefaultRates().model_dump()
+    return rates.get('value', DefaultRates().model_dump())
+
+@api_router.put("/settings/default-rates")
+async def update_default_rates(rates: DefaultRates, current_user: User = Depends(get_current_user)):
+    await db.settings.update_one(
+        {"key": "default_rates"},
+        {"$set": {"key": "default_rates", "value": rates.model_dump(), "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    return {"message": "Default rates updated", "rates": rates.model_dump()}
 
 # ==================== CONTRACT API ENDPOINTS ====================
 

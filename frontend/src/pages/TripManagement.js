@@ -31,7 +31,8 @@ const TripManagement = () => {
   });
   const [assignData, setAssignData] = useState({
     vehicle_id: '',
-    driver_id: ''
+    driver_id: '',
+    contract_id: ''
   });
   const [dutySlipData, setDutySlipData] = useState({
     opening_km: '',
@@ -93,11 +94,18 @@ const TripManagement = () => {
     e.preventDefault();
     if (!selectedTrip) return;
     try {
-      await axios.post(`${API_BASE}/duties/${selectedTrip.id}/assign`, assignData);
+      const payload = {
+        vehicle_id: assignData.vehicle_id,
+        driver_id: assignData.driver_id
+      };
+      if (assignData.contract_id) {
+        payload.contract_id = assignData.contract_id;
+      }
+      await axios.post(`${API_BASE}/duties/${selectedTrip.id}/assign`, payload);
       toast.success('Trip assigned successfully');
       setShowAssignModal(false);
       setSelectedTrip(null);
-      setAssignData({ vehicle_id: '', driver_id: '' });
+      setAssignData({ vehicle_id: '', driver_id: '', contract_id: '' });
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to assign trip');
@@ -444,7 +452,7 @@ const TripManagement = () => {
       <Dialog open={showAssignModal} onOpenChange={setShowAssignModal}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold tracking-tight">Assign Vehicle & Driver</DialogTitle>
+            <DialogTitle className="text-xl font-semibold tracking-tight">Assign Vehicle, Driver & Contract</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleAssignTrip} className="space-y-4 mt-4">
             <div>
@@ -480,6 +488,27 @@ const TripManagement = () => {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                Contract (for Billing)
+              </label>
+              <Select value={assignData.contract_id || 'none'} onValueChange={(value) => setAssignData({ ...assignData, contract_id: value === 'none' ? '' : value })}>
+                <SelectTrigger data-testid="contract-select">
+                  <SelectValue placeholder="Select contract (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Contract (On-Call / Manual Rate)</SelectItem>
+                  {contracts
+                    .filter(c => c.client_id === selectedTrip?.client_id && c.is_active)
+                    .map(contract => (
+                      <SelectItem key={contract.id} value={contract.id}>
+                        {contract.name} - {contract.contract_type.replace('_', ' ')}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-[#525252] mt-1">Select contract to apply pricing during invoicing</p>
             </div>
             <div className="flex gap-3 pt-4">
               <button
