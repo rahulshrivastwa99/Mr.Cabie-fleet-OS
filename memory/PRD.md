@@ -104,7 +104,7 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 - Corporate Booking Form with all advanced options
 - Dynamic pricing calculation
 
-### Session 5: Duty Slip System + Contract-Based Billing (CURRENT)
+### Session 5: Duty Slip System + Contract-Based Billing
 - **Trip Model** (renamed from Duty) with contract_id and duty_slip_id
 - **DutySlip Model** with KM tracking, signature, status
 - **Contract Model** with 6 pricing types
@@ -112,6 +112,23 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 - **Admin Pages**: TripManagement, DutySlips, ContractManagement
 - **Corporate Pages**: CorporateDutySlips with monthly summary
 - **APIs**: Full CRUD for contracts, duty slips, invoice generation
+
+### Session 6: Admin Onboarding + Corporate Self-Service (Dec 31, 2025 - CURRENT)
+- **Client Management Upgrade**:
+  - Added tabs: "Clients" and "Corporate Users"
+  - Corporate User creation form with role/department/password generation
+  - Credentials display modal (email + password to share with client)
+  - User count per client card
+  - Delete user functionality
+- **Admin Cancel Trip Feature**:
+  - Added "Cancel Trip" button for trips not yet started (CREATED, ASSIGNED, ACCEPTED)
+  - Button hidden for STARTED/COMPLETED/BILLED/CLOSED trips
+  - Calls PATCH /api/duties/{id}/cancel
+- **Corporate Password Change**:
+  - Settings gear icon added to sidebar profile
+  - Password change modal with current/new/confirm fields
+  - Eye toggle icons for password visibility
+  - Calls POST /api/corporate/auth/change-password
 
 ---
 
@@ -140,7 +157,8 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 ## Future Tasks (P2 - Backlog)
 1. **Auto Assignment Engine** - Proximity-based driver assignment
 2. **Deep Analytics** - Fleet utilization, driver performance, cost analysis
-3. **Backend Refactoring** - Split server.py into modular routers
+3. **Backend Refactoring** - Split server.py (2800+ lines) into modular routers (/app/backend/routes/)
+4. **Invoice PDF Download** - Generate downloadable PDF invoices
 
 ---
 
@@ -154,6 +172,6 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 - **Mobile (Planned)**: Flutter
 
 ## Key API Endpoints
-- Admin: `/api/trips`, `/api/duty-slips`, `/api/contracts`, `/api/invoices`
-- Corporate: `/api/corporate/duty-slips`, `/api/corporate/monthly-summary`, `/api/corporate/contract`
+- Admin: `/api/trips`, `/api/duty-slips`, `/api/contracts`, `/api/invoices`, `/api/admin/onboard-corporate-user`, `/api/duties/{id}/cancel`
+- Corporate: `/api/corporate/duty-slips`, `/api/corporate/monthly-summary`, `/api/corporate/auth/change-password`
 - Invoice Generation: `/api/invoices/generate-from-slips`
