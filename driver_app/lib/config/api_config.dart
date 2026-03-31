@@ -1,0 +1,25 @@
+class ApiConfig {
+  // TODO: Update this URL for production
+  static const String baseUrl = 'https://fleet-os-preview-1.preview.emergentagent.com/api';
+  
+  // API Endpoints
+  static const String sendOtp = '/driver/auth/send-otp';
+  static const String verifyOtp = '/driver/auth/verify-otp';
+  static const String driverProfile = '/driver/auth/me';
+  static const String driverTrips = '/driver/trips';
+  static const String tripHistory = '/driver/trips/history';
+  static const String updateLocation = '/driver/location';
+  
+  // Trip actions
+  static String tripDetail(String tripId) => '/driver/trips/$tripId';
+  static String acceptTrip(String tripId) => '/driver/trips/$tripId/accept';
+  static String rejectTrip(String tripId) => '/driver/trips/$tripId/reject';
+  static String startTrip(String tripId) => '/driver/trips/$tripId/start';
+  static String completeTrip(String tripId) => '/driver/trips/$tripId/complete';
+  
+  // Google Maps API Key (Placeholder)
+  static const String googleMapsApiKey = 'YOUR_GOOGLE_MAPS_API_KEY_HERE';
+  
+  // Location update interval (seconds)
+  static const int locationUpdateInterval = 30;
+}

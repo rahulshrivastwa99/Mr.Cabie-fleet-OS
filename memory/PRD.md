@@ -4,7 +4,7 @@
 Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet management companies. It consists of:
 1. **Enterprise Web Platform (Admin Panel)** - For operations team
 2. **Corporate Customer Dashboard** - For client companies
-3. **Driver Mobile App** (Planned - Android/Flutter)
+3. **Driver Mobile App** (Flutter/Android) - **IN DEVELOPMENT**
 4. **Passenger Mobile App** (Planned - Android/iOS)
 
 ## Core Architecture
@@ -16,7 +16,7 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 - **Fleet Admin** - Manages vehicles, drivers, trips, contracts, billing
 - **Corporate HR/Admin** - Creates bookings for employees
 - **Corporate Finance** - Views invoices and billing
-- **Driver** (Future) - Accepts duties, navigation, trip management
+- **Driver** - Accepts duties, navigation, trip management (**APP READY**)
 - **Passenger/Employee** (Future) - Views trip details, live tracking
 
 ## Core Modules
@@ -25,14 +25,17 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 - Vehicle CRUD with type (SEDAN, SUV, HATCHBACK, EV, LUXURY)
 - Vehicle status tracking (AVAILABLE, ON_DUTY, MAINTENANCE, INACTIVE)
 
-### 2. Driver Management (COMPLETE)
+### 2. Driver Management (COMPLETE + ENHANCED)
 - Driver CRUD with license, contact details
-- Driver status tracking and availability
+- **NEW**: Driver status management (AVAILABLE, ON_DUTY, OFF_DUTY, ON_LEAVE, INACTIVE)
+- **NEW**: Admin can manually override driver status
+- **NEW**: Location tracking column with GPS status
 
 ### 3. Trip Management (COMPLETE - Renamed from Duty)
 - **Strict State Machine**: CREATED → ASSIGNED → ACCEPTED → STARTED → COMPLETED → BILLED → CLOSED
 - Manual driver/vehicle assignment by admin
 - Trip links to bookings and contracts
+- **NEW**: Admin Cancel Trip feature (before trip starts)
 
 ### 4. Duty Slip System (COMPLETE - NEW)
 - **1:1 relationship with Trip** - Each trip generates exactly one duty slip
@@ -130,34 +133,75 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
   - Eye toggle icons for password visibility
   - Calls POST /api/corporate/auth/change-password
 
+### Session 7: Driver Mobile App + Live Tracking (Dec 31, 2025)
+- **Driver Mobile App (Flutter - Code Complete)**
+  - `/app/driver_app/` - Full Flutter project structure
+  - OTP-based authentication (phone number login)
+  - Trip list with accept/reject
+  - Start trip (opening KM entry)
+  - Complete trip (closing KM, passenger signature)
+  - Real-time location broadcasting (every 30 seconds)
+  - Screens: Login, OTP, Home, Trip List, Trip Detail, Active Trip, Complete Trip with Signature
+
+- **Backend Driver APIs (COMPLETE)**
+  - POST `/api/driver/auth/send-otp` - Send OTP to driver phone
+  - POST `/api/driver/auth/verify-otp` - Verify and get JWT token
+  - GET `/api/driver/auth/me` - Get driver profile
+  - GET `/api/driver/trips` - Get assigned trips
+  - PATCH `/api/driver/trips/{id}/accept` - Accept trip
+  - PATCH `/api/driver/trips/{id}/reject` - Reject trip
+  - POST `/api/driver/trips/{id}/start` - Start trip (create duty slip)
+  - POST `/api/driver/trips/{id}/complete` - Complete trip (close duty slip)
+  - POST `/api/driver/location` - Update driver location
+
+- **Live Tracking (COMPLETE)**
+  - Admin Dashboard: View all driver locations with GPS status
+  - Driver status summary cards (Available, On Duty, Off Duty, On Leave, Inactive)
+  - Admin can manually change driver status with reason
+  - Corporate Dashboard: View only assigned driver locations during active trips
+  - Google Maps placeholder (requires API key to enable map view)
+
+- **Driver/Vehicle Status Management**
+  - New driver status: ON_LEAVE (for holidays)
+  - PATCH `/api/admin/drivers/{id}/status` - Admin update driver status
+  - PATCH `/api/admin/vehicles/{id}/status` - Admin update vehicle status
+  - Validation: Cannot set to ON_LEAVE/INACTIVE if driver has active trips
+
+---
+
+## Driver App Setup Instructions
+1. Navigate to `/app/driver_app/`
+2. Run `flutter pub get` to install dependencies
+3. Update `lib/config/api_config.dart` with production API URL
+4. Run `flutter run` to test on device/emulator
+5. Build APK: `flutter build apk --release`
+
+## Google Maps Integration
+1. Get API key from https://console.cloud.google.com/google/maps-apis
+2. Enable: Maps JavaScript API, Directions API, Geocoding API
+3. Add to frontend/.env: `REACT_APP_GOOGLE_MAPS_API_KEY=your_key_here`
+4. Restart frontend service
+
 ---
 
 ## Upcoming Tasks (P0 - High Priority)
-1. **Driver Mobile App (Flutter/Android)**
-   - Secure login
-   - Duty list and accept/reject
-   - Duty Slip creation (opening KM entry)
-   - Trip completion (closing KM entry)
-   - Signature capture from passenger
-   - Real-time location sharing
-
-2. **Passenger Mobile App (Flutter/iOS + Android)**
+1. **Passenger Mobile App (Flutter/iOS + Android)**
    - Trip details view
    - Live tracking
    - SOS feature
    - Push notifications
    - Sign duty slip digitally
 
-3. **Real Notifications Integration**
+2. **Real Notifications Integration**
    - Firebase Cloud Messaging
-   - Twilio SMS/WhatsApp
+   - Twilio SMS/WhatsApp (OTP delivery)
 
 ---
 
 ## Future Tasks (P2 - Backlog)
 1. **Auto Assignment Engine** - Proximity-based driver assignment
 2. **Deep Analytics** - Fleet utilization, driver performance, cost analysis
-3. **Backend Refactoring** - Split server.py (2800+ lines) into modular routers (/app/backend/routes/)
+3. **Backend Refactoring** - Split server.py (3400+ lines) into modular routers (/app/backend/routes/)
 4. **Invoice PDF Download** - Generate downloadable PDF invoices
 
 ---
@@ -165,13 +209,15 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 ## Test Credentials
 - **Admin Portal**: admin@fleetOS.com / password123
 - **Corporate Portal**: hr@techcorp.in / password123
+- **Test Driver**: 9876543210 (Use OTP from debug response)
 
 ## Technical Stack
 - **Backend**: FastAPI (Python 3.11), MongoDB
 - **Frontend**: React 18, Tailwind CSS, shadcn/ui
-- **Mobile (Planned)**: Flutter
+- **Mobile**: Flutter (driver_app ready, passenger_app planned)
 
 ## Key API Endpoints
-- Admin: `/api/trips`, `/api/duty-slips`, `/api/contracts`, `/api/invoices`, `/api/admin/onboard-corporate-user`, `/api/duties/{id}/cancel`
-- Corporate: `/api/corporate/duty-slips`, `/api/corporate/monthly-summary`, `/api/corporate/auth/change-password`
+- Admin: `/api/trips`, `/api/duty-slips`, `/api/contracts`, `/api/invoices`, `/api/admin/drivers/{id}/status`, `/api/admin/drivers/locations`
+- Corporate: `/api/corporate/duty-slips`, `/api/corporate/tracking/active`, `/api/corporate/auth/change-password`
+- Driver: `/api/driver/auth/*`, `/api/driver/trips/*`, `/api/driver/location`
 - Invoice Generation: `/api/invoices/generate-from-slips`

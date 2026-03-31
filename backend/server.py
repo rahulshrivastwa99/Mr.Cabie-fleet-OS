@@ -49,6 +49,7 @@ class DriverStatus(str, Enum):
     AVAILABLE = "AVAILABLE"
     ON_DUTY = "ON_DUTY"
     OFF_DUTY = "OFF_DUTY"
+    ON_LEAVE = "ON_LEAVE"  # For holidays/leave
     INACTIVE = "INACTIVE"
 
 # Renamed from DutyStatus to TripStatus
@@ -495,6 +496,47 @@ class CorporateUserUpdate(BaseModel):
 class CorporatePasswordChange(BaseModel):
     current_password: str
     new_password: str
+
+# Driver App Models
+class DriverOTPRequest(BaseModel):
+    phone: str
+
+class DriverOTPVerify(BaseModel):
+    phone: str
+    otp: str
+
+class DriverLocationUpdate(BaseModel):
+    latitude: float
+    longitude: float
+    accuracy: Optional[float] = None
+    speed: Optional[float] = None
+    heading: Optional[float] = None
+    timestamp: Optional[datetime] = None
+
+class DriverLocation(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    driver_id: str
+    latitude: float
+    longitude: float
+    accuracy: Optional[float] = None
+    speed: Optional[float] = None
+    heading: Optional[float] = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    trip_id: Optional[str] = None  # If on active trip
+
+class TripActionRequest(BaseModel):
+    opening_km: Optional[float] = None
+    closing_km: Optional[float] = None
+    driver_remarks: Optional[str] = None
+    passenger_signature: Optional[str] = None  # Base64 encoded
+
+class DriverStatusUpdate(BaseModel):
+    status: DriverStatus
+    reason: Optional[str] = None
+
+class VehicleStatusUpdate(BaseModel):
+    status: VehicleStatus
+    reason: Optional[str] = None
 
 class Employee(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1762,8 +1804,6 @@ async def generate_invoice_from_slips(
     )
     
     return await create_invoice(invoice_data, current_user)
-    
-    return invoice
 
 
 
@@ -2829,6 +2869,586 @@ async def get_corporate_contract(current_user: CorporateUser = Depends(get_curre
     contract['updated_at'] = datetime.fromisoformat(contract['updated_at'])
     
     return {"contract": contract}
+
+# =============================================================================
+# DRIVER MOBILE APP APIs
+# =============================================================================
+
+# In-memory OTP store (in production, use Redis or similar)
+driver_otps = {}
+
+# Driver Authentication
+@api_router.post("/driver/auth/send-otp")
+async def driver_send_otp(data: DriverOTPRequest):
+    """Send OTP to driver's phone number"""
+    # Find driver by phone
+    driver = await db.drivers.find_one({"phone": data.phone}, {"_id": 0})
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not found with this phone number")
+    
+    # Generate 6-digit OTP (in production, send via Twilio)
+    import random
+    otp = str(random.randint(100000, 999999))
+    
+    # Store OTP with expiry (5 minutes)
+    driver_otps[data.phone] = {
+        "otp": otp,
+        "expires_at": datetime.now(timezone.utc).timestamp() + 300,
+        "driver_id": driver['id']
+    }
+    
+    # In production: Send OTP via Twilio SMS
+    # For now, we'll return it (REMOVE IN PRODUCTION)
+    logger.info(f"OTP for {data.phone}: {otp}")
+    
+    return {
+        "message": "OTP sent successfully",
+        "phone": data.phone,
+        "debug_otp": otp  # REMOVE IN PRODUCTION
+    }
+
+@api_router.post("/driver/auth/verify-otp")
+async def driver_verify_otp(data: DriverOTPVerify):
+    """Verify OTP and return JWT token"""
+    stored = driver_otps.get(data.phone)
+    
+    if not stored:
+        raise HTTPException(status_code=400, detail="OTP not found. Please request a new OTP.")
+    
+    if datetime.now(timezone.utc).timestamp() > stored['expires_at']:
+        del driver_otps[data.phone]
+        raise HTTPException(status_code=400, detail="OTP expired. Please request a new OTP.")
+    
+    if stored['otp'] != data.otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    
+    # OTP verified, generate JWT
+    driver = await db.drivers.find_one({"id": stored['driver_id']}, {"_id": 0})
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not found")
+    
+    # Clean up OTP
+    del driver_otps[data.phone]
+    
+    # Generate JWT token
+    token_data = {
+        "sub": driver['id'],
+        "type": "driver",
+        "name": driver['name'],
+        "phone": driver['phone'],
+        "exp": datetime.now(timezone.utc).timestamp() + 86400 * 30  # 30 days
+    }
+    token = jwt.encode(token_data, SECRET_KEY, algorithm="HS256")
+    
+    return {
+        "token": token,
+        "driver": {
+            "id": driver['id'],
+            "name": driver['name'],
+            "phone": driver['phone'],
+            "email": driver.get('email'),
+            "status": driver.get('status', 'AVAILABLE'),
+            "license_number": driver.get('license_number')
+        }
+    }
+
+# Driver Auth Dependency
+async def get_current_driver(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=["HS256"])
+        if payload.get("type") != "driver":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        driver_id = payload.get("sub")
+        driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+        if not driver:
+            raise HTTPException(status_code=401, detail="Driver not found")
+        return driver
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@api_router.get("/driver/auth/me")
+async def driver_get_profile(current_driver: dict = Depends(get_current_driver)):
+    """Get current driver profile"""
+    return current_driver
+
+# Driver Trip Management
+@api_router.get("/driver/trips")
+async def driver_get_trips(current_driver: dict = Depends(get_current_driver)):
+    """Get trips assigned to the current driver"""
+    trips = await db.duties.find({
+        "driver_id": current_driver['id'],
+        "status": {"$in": ["ASSIGNED", "ACCEPTED", "STARTED"]}
+    }, {"_id": 0}).sort("pickup_time", 1).to_list(100)
+    
+    # Enrich with client and vehicle info
+    enriched_trips = []
+    for trip in trips:
+        client = await db.clients.find_one({"id": trip.get('client_id')}, {"_id": 0, "company_name": 1})
+        vehicle = await db.vehicles.find_one({"id": trip.get('vehicle_id')}, {"_id": 0, "registration_number": 1, "vehicle_type": 1, "model": 1})
+        
+        enriched_trips.append({
+            **trip,
+            "client_name": client.get('company_name') if client else None,
+            "vehicle": vehicle
+        })
+    
+    return enriched_trips
+
+@api_router.get("/driver/trips/history")
+async def driver_get_trip_history(
+    limit: int = 20,
+    offset: int = 0,
+    current_driver: dict = Depends(get_current_driver)
+):
+    """Get completed trips history for the driver"""
+    trips = await db.duties.find({
+        "driver_id": current_driver['id'],
+        "status": {"$in": ["COMPLETED", "BILLED", "CLOSED"]}
+    }, {"_id": 0}).sort("pickup_time", -1).skip(offset).limit(limit).to_list(limit)
+    
+    return trips
+
+@api_router.get("/driver/trips/{trip_id}")
+async def driver_get_trip_detail(trip_id: str, current_driver: dict = Depends(get_current_driver)):
+    """Get detailed trip information"""
+    trip = await db.duties.find_one({
+        "id": trip_id,
+        "driver_id": current_driver['id']
+    }, {"_id": 0})
+    
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found or not assigned to you")
+    
+    # Get related info
+    client = await db.clients.find_one({"id": trip.get('client_id')}, {"_id": 0})
+    vehicle = await db.vehicles.find_one({"id": trip.get('vehicle_id')}, {"_id": 0})
+    duty_slip = None
+    if trip.get('duty_slip_id'):
+        duty_slip = await db.duty_slips.find_one({"id": trip['duty_slip_id']}, {"_id": 0})
+    
+    return {
+        **trip,
+        "client": client,
+        "vehicle": vehicle,
+        "duty_slip": duty_slip
+    }
+
+@api_router.patch("/driver/trips/{trip_id}/accept")
+async def driver_accept_trip(trip_id: str, current_driver: dict = Depends(get_current_driver)):
+    """Accept an assigned trip"""
+    trip = await db.duties.find_one({
+        "id": trip_id,
+        "driver_id": current_driver['id'],
+        "status": "ASSIGNED"
+    }, {"_id": 0})
+    
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found or cannot be accepted")
+    
+    await db.duties.update_one(
+        {"id": trip_id},
+        {"$set": {
+            "status": "ACCEPTED",
+            "accepted_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "Trip accepted successfully", "status": "ACCEPTED"}
+
+@api_router.patch("/driver/trips/{trip_id}/reject")
+async def driver_reject_trip(
+    trip_id: str,
+    reason: Optional[str] = None,
+    current_driver: dict = Depends(get_current_driver)
+):
+    """Reject an assigned trip"""
+    trip = await db.duties.find_one({
+        "id": trip_id,
+        "driver_id": current_driver['id'],
+        "status": "ASSIGNED"
+    }, {"_id": 0})
+    
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found or cannot be rejected")
+    
+    # Update trip - unassign driver
+    await db.duties.update_one(
+        {"id": trip_id},
+        {"$set": {
+            "status": "CREATED",
+            "driver_id": None,
+            "rejection_reason": reason,
+            "rejected_by": current_driver['id'],
+            "rejected_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Set driver back to available
+    await db.drivers.update_one(
+        {"id": current_driver['id']},
+        {"$set": {"status": "AVAILABLE", "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": "Trip rejected", "status": "CREATED"}
+
+@api_router.post("/driver/trips/{trip_id}/start")
+async def driver_start_trip(
+    trip_id: str,
+    data: TripActionRequest,
+    current_driver: dict = Depends(get_current_driver)
+):
+    """Start a trip - creates duty slip with opening KM"""
+    if not data.opening_km:
+        raise HTTPException(status_code=400, detail="Opening KM is required")
+    
+    trip = await db.duties.find_one({
+        "id": trip_id,
+        "driver_id": current_driver['id'],
+        "status": "ACCEPTED"
+    }, {"_id": 0})
+    
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found or cannot be started")
+    
+    # Create duty slip
+    duty_slip_id = str(uuid.uuid4())
+    duty_slip = {
+        "id": duty_slip_id,
+        "trip_id": trip_id,
+        "client_id": trip['client_id'],
+        "driver_id": current_driver['id'],
+        "vehicle_id": trip.get('vehicle_id'),
+        "contract_id": trip.get('contract_id'),
+        "opening_km": data.opening_km,
+        "closing_km": None,
+        "total_km": None,
+        "status": "DRAFT",
+        "start_time": datetime.now(timezone.utc).isoformat(),
+        "end_time": None,
+        "driver_remarks": data.driver_remarks,
+        "passenger_signature": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.duty_slips.insert_one(duty_slip)
+    
+    # Update trip
+    await db.duties.update_one(
+        {"id": trip_id},
+        {"$set": {
+            "status": "STARTED",
+            "duty_slip_id": duty_slip_id,
+            "actual_start_time": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Update driver status
+    await db.drivers.update_one(
+        {"id": current_driver['id']},
+        {"$set": {"status": "ON_DUTY", "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    # Update vehicle status
+    if trip.get('vehicle_id'):
+        await db.vehicles.update_one(
+            {"id": trip['vehicle_id']},
+            {"$set": {"status": "ON_DUTY", "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    
+    return {
+        "message": "Trip started successfully",
+        "status": "STARTED",
+        "duty_slip_id": duty_slip_id
+    }
+
+@api_router.post("/driver/trips/{trip_id}/complete")
+async def driver_complete_trip(
+    trip_id: str,
+    data: TripActionRequest,
+    current_driver: dict = Depends(get_current_driver)
+):
+    """Complete a trip - closes duty slip with closing KM and signature"""
+    if not data.closing_km:
+        raise HTTPException(status_code=400, detail="Closing KM is required")
+    if not data.passenger_signature:
+        raise HTTPException(status_code=400, detail="Passenger signature is required")
+    
+    trip = await db.duties.find_one({
+        "id": trip_id,
+        "driver_id": current_driver['id'],
+        "status": "STARTED"
+    }, {"_id": 0})
+    
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found or cannot be completed")
+    
+    if not trip.get('duty_slip_id'):
+        raise HTTPException(status_code=400, detail="No duty slip found for this trip")
+    
+    # Get duty slip
+    duty_slip = await db.duty_slips.find_one({"id": trip['duty_slip_id']}, {"_id": 0})
+    if not duty_slip:
+        raise HTTPException(status_code=404, detail="Duty slip not found")
+    
+    if data.closing_km < duty_slip['opening_km']:
+        raise HTTPException(status_code=400, detail="Closing KM cannot be less than opening KM")
+    
+    total_km = data.closing_km - duty_slip['opening_km']
+    
+    # Update duty slip
+    await db.duty_slips.update_one(
+        {"id": trip['duty_slip_id']},
+        {"$set": {
+            "closing_km": data.closing_km,
+            "total_km": total_km,
+            "status": "SIGNED",
+            "end_time": datetime.now(timezone.utc).isoformat(),
+            "passenger_signature": data.passenger_signature,
+            "driver_remarks": data.driver_remarks or duty_slip.get('driver_remarks'),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Update trip
+    await db.duties.update_one(
+        {"id": trip_id},
+        {"$set": {
+            "status": "COMPLETED",
+            "end_time": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Update driver status
+    await db.drivers.update_one(
+        {"id": current_driver['id']},
+        {"$set": {"status": "AVAILABLE", "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    # Update vehicle status
+    if trip.get('vehicle_id'):
+        await db.vehicles.update_one(
+            {"id": trip['vehicle_id']},
+            {"$set": {"status": "AVAILABLE", "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    
+    return {
+        "message": "Trip completed successfully",
+        "status": "COMPLETED",
+        "total_km": total_km
+    }
+
+# Driver Location Tracking
+@api_router.post("/driver/location")
+async def driver_update_location(
+    data: DriverLocationUpdate,
+    current_driver: dict = Depends(get_current_driver)
+):
+    """Update driver's current location"""
+    # Find active trip if any
+    active_trip = await db.duties.find_one({
+        "driver_id": current_driver['id'],
+        "status": "STARTED"
+    }, {"_id": 0, "id": 1, "client_id": 1})
+    
+    location_data = {
+        "driver_id": current_driver['id'],
+        "latitude": data.latitude,
+        "longitude": data.longitude,
+        "accuracy": data.accuracy,
+        "speed": data.speed,
+        "heading": data.heading,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "trip_id": active_trip['id'] if active_trip else None,
+        "client_id": active_trip['client_id'] if active_trip else None
+    }
+    
+    # Upsert driver location
+    await db.driver_locations.update_one(
+        {"driver_id": current_driver['id']},
+        {"$set": location_data},
+        upsert=True
+    )
+    
+    # Also update driver's current_location field
+    await db.drivers.update_one(
+        {"id": current_driver['id']},
+        {"$set": {
+            "current_location": {
+                "lat": data.latitude,
+                "lng": data.longitude,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "Location updated", "timestamp": location_data['timestamp']}
+
+# =============================================================================
+# ADMIN - DRIVER/VEHICLE STATUS MANAGEMENT
+# =============================================================================
+
+@api_router.patch("/admin/drivers/{driver_id}/status")
+async def admin_update_driver_status(
+    driver_id: str,
+    data: DriverStatusUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    """Admin manually updates driver status"""
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not found")
+    
+    # Check if driver has active trip
+    if data.status in ["ON_LEAVE", "INACTIVE"]:
+        active_trip = await db.duties.find_one({
+            "driver_id": driver_id,
+            "status": {"$in": ["ASSIGNED", "ACCEPTED", "STARTED"]}
+        }, {"_id": 0})
+        if active_trip:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot change status - driver has active trips. Complete or reassign trips first."
+            )
+    
+    await db.drivers.update_one(
+        {"id": driver_id},
+        {"$set": {
+            "status": data.status,
+            "status_reason": data.reason,
+            "status_updated_by": current_user.id,
+            "status_updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": f"Driver status updated to {data.status}", "status": data.status}
+
+@api_router.patch("/admin/vehicles/{vehicle_id}/status")
+async def admin_update_vehicle_status(
+    vehicle_id: str,
+    data: VehicleStatusUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    """Admin manually updates vehicle status"""
+    vehicle = await db.vehicles.find_one({"id": vehicle_id}, {"_id": 0})
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    
+    # Check if vehicle has active trip
+    if data.status in ["MAINTENANCE", "INACTIVE"]:
+        active_trip = await db.duties.find_one({
+            "vehicle_id": vehicle_id,
+            "status": {"$in": ["ASSIGNED", "ACCEPTED", "STARTED"]}
+        }, {"_id": 0})
+        if active_trip:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot change status - vehicle has active trips. Complete or reassign trips first."
+            )
+    
+    await db.vehicles.update_one(
+        {"id": vehicle_id},
+        {"$set": {
+            "status": data.status,
+            "status_reason": data.reason,
+            "status_updated_by": current_user.id,
+            "status_updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": f"Vehicle status updated to {data.status}", "status": data.status}
+
+# =============================================================================
+# LIVE TRACKING APIs
+# =============================================================================
+
+@api_router.get("/admin/drivers/locations")
+async def admin_get_all_driver_locations(current_user: User = Depends(get_current_user)):
+    """Admin gets all driver locations"""
+    # Get all active drivers with their locations
+    drivers = await db.drivers.find(
+        {"status": {"$in": ["AVAILABLE", "ON_DUTY"]}},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Get latest locations
+    locations = await db.driver_locations.find({}, {"_id": 0}).to_list(1000)
+    location_map = {loc['driver_id']: loc for loc in locations}
+    
+    result = []
+    for driver in drivers:
+        loc = location_map.get(driver['id'])
+        result.append({
+            "driver_id": driver['id'],
+            "name": driver['name'],
+            "phone": driver['phone'],
+            "status": driver['status'],
+            "location": {
+                "latitude": loc['latitude'] if loc else None,
+                "longitude": loc['longitude'] if loc else None,
+                "updated_at": loc['timestamp'] if loc else None,
+                "trip_id": loc.get('trip_id') if loc else None
+            } if loc else None
+        })
+    
+    return result
+
+@api_router.get("/admin/drivers/{driver_id}/location")
+async def admin_get_driver_location(driver_id: str, current_user: User = Depends(get_current_user)):
+    """Admin gets specific driver location"""
+    driver = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not found")
+    
+    location = await db.driver_locations.find_one({"driver_id": driver_id}, {"_id": 0})
+    
+    return {
+        "driver": driver,
+        "location": location
+    }
+
+@api_router.get("/corporate/tracking/active")
+async def corporate_get_active_trip_tracking(current_user: CorporateUser = Depends(get_current_corporate_user)):
+    """Corporate user gets tracking for their active trips only"""
+    # Find active trips for this client
+    active_trips = await db.duties.find({
+        "client_id": current_user.client_id,
+        "status": "STARTED"
+    }, {"_id": 0}).to_list(100)
+    
+    if not active_trips:
+        return {"active_trips": [], "message": "No active trips"}
+    
+    result = []
+    for trip in active_trips:
+        driver = await db.drivers.find_one({"id": trip.get('driver_id')}, {"_id": 0, "id": 1, "name": 1, "phone": 1})
+        vehicle = await db.vehicles.find_one({"id": trip.get('vehicle_id')}, {"_id": 0, "registration_number": 1, "vehicle_type": 1})
+        location = await db.driver_locations.find_one({"driver_id": trip.get('driver_id')}, {"_id": 0})
+        
+        result.append({
+            "trip_id": trip['id'],
+            "passenger_name": trip.get('passenger_name'),
+            "pickup_location": trip.get('pickup_location'),
+            "dropoff_location": trip.get('dropoff_location'),
+            "driver": driver,
+            "vehicle": vehicle,
+            "location": {
+                "latitude": location['latitude'] if location else None,
+                "longitude": location['longitude'] if location else None,
+                "updated_at": location['timestamp'] if location else None
+            } if location else None
+        })
+    
+    return {"active_trips": result}
 
 # Include router
 app.include_router(api_router)
