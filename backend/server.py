@@ -3428,11 +3428,36 @@ async def corporate_get_active_trip_tracking(current_user: CorporateUser = Depen
     if not active_trips:
         return {"active_trips": [], "message": "No active trips"}
     
+    # Batch fetch all related data to avoid N+1 queries
+    driver_ids = list(set(t.get('driver_id') for t in active_trips if t.get('driver_id')))
+    vehicle_ids = list(set(t.get('vehicle_id') for t in active_trips if t.get('vehicle_id')))
+    
+    # Fetch all drivers, vehicles, and locations in batch
+    drivers_list = await db.drivers.find(
+        {"id": {"$in": driver_ids}}, 
+        {"_id": 0, "id": 1, "name": 1, "phone": 1}
+    ).to_list(100) if driver_ids else []
+    
+    vehicles_list = await db.vehicles.find(
+        {"id": {"$in": vehicle_ids}}, 
+        {"_id": 0, "id": 1, "registration_number": 1, "vehicle_type": 1}
+    ).to_list(100) if vehicle_ids else []
+    
+    locations_list = await db.driver_locations.find(
+        {"driver_id": {"$in": driver_ids}}, 
+        {"_id": 0}
+    ).to_list(100) if driver_ids else []
+    
+    # Create lookup dictionaries
+    driver_map = {d['id']: d for d in drivers_list}
+    vehicle_map = {v['id']: v for v in vehicles_list}
+    location_map = {loc['driver_id']: loc for loc in locations_list}
+    
     result = []
     for trip in active_trips:
-        driver = await db.drivers.find_one({"id": trip.get('driver_id')}, {"_id": 0, "id": 1, "name": 1, "phone": 1})
-        vehicle = await db.vehicles.find_one({"id": trip.get('vehicle_id')}, {"_id": 0, "registration_number": 1, "vehicle_type": 1})
-        location = await db.driver_locations.find_one({"driver_id": trip.get('driver_id')}, {"_id": 0})
+        driver = driver_map.get(trip.get('driver_id'))
+        vehicle = vehicle_map.get(trip.get('vehicle_id'))
+        location = location_map.get(trip.get('driver_id'))
         
         result.append({
             "trip_id": trip['id'],
