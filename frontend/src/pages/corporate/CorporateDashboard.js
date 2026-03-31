@@ -76,7 +76,7 @@ const CorporateDashboard = () => {
     <div className="p-6" data-testid="corporate-dashboard-page">
       <div className="mb-8">
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight" data-testid="corporate-dashboard-title">
-          Welcome, {user?.name}
+          Welcome, {user?.display_name || user?.name}
         </h1>
         <p className="text-xs text-[#525252] uppercase tracking-widest mt-2">Corporate Dashboard</p>
       </div>

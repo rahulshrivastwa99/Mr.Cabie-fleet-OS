@@ -1,21 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, Building } from '@phosphor-icons/react';
+import { Plus, Building, UserPlus, Users, Trash, Copy } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+const CORPORATE_ROLES = [
+  { value: 'ADMIN', label: 'Admin' },
+  { value: 'HR', label: 'HR Manager' },
+  { value: 'FINANCE', label: 'Finance' },
+  { value: 'VIEWER', label: 'Viewer' }
+];
+
 const ClientManagement = () => {
   const [clients, setClients] = useState([]);
+  const [corporateUsers, setCorporateUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [newCredentials, setNewCredentials] = useState(null);
   const [formData, setFormData] = useState({
     company_name: '',
     contact_person: '',
     email: '',
     phone: '',
     gstin: ''
+  });
+  const [userFormData, setUserFormData] = useState({
+    email: '',
+    password: '',
+    name: '',
+    display_name: '',
+    role: 'VIEWER',
+    department: ''
   });
 
   useEffect(() => {
@@ -24,10 +45,14 @@ const ClientManagement = () => {
 
   const fetchClients = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/clients`);
-      setClients(response.data);
+      const [clientsRes, usersRes] = await Promise.all([
+        axios.get(`${API_BASE}/clients`),
+        axios.get(`${API_BASE}/admin/corporate-users`)
+      ]);
+      setClients(clientsRes.data);
+      setCorporateUsers(usersRes.data);
     } catch (error) {
-      toast.error('Failed to load clients');
+      toast.error('Failed to load data');
     } finally {
       setLoading(false);
     }

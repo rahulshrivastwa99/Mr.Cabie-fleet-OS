@@ -468,6 +468,7 @@ class CorporateUser(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     email: str
     name: str
+    display_name: Optional[str] = None  # Preferred name/designation for greeting
     client_id: str  # Links to Client
     role: CorporateUserRole = CorporateUserRole.VIEWER
     department: Optional[str] = None
@@ -477,6 +478,7 @@ class CorporateUserCreate(BaseModel):
     email: str
     password: str
     name: str
+    display_name: Optional[str] = None
     client_id: str
     role: CorporateUserRole = CorporateUserRole.VIEWER
     department: Optional[str] = None
@@ -484,6 +486,15 @@ class CorporateUserCreate(BaseModel):
 class CorporateUserLogin(BaseModel):
     email: str
     password: str
+
+class CorporateUserUpdate(BaseModel):
+    name: Optional[str] = None
+    display_name: Optional[str] = None
+    department: Optional[str] = None
+
+class CorporatePasswordChange(BaseModel):
+    current_password: str
+    new_password: str
 
 class Employee(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -986,6 +997,98 @@ async def update_duty_status(duty_id: str, status_data: DutyStatusUpdate, curren
     
     return {"message": "Duty status updated"}
 
+# Admin Cancel Trip/Duty (available until ride starts)
+@api_router.patch("/duties/{duty_id}/cancel")
+async def admin_cancel_duty(duty_id: str, reason: Optional[str] = None, current_user: User = Depends(get_current_user)):
+    duty = await db.duties.find_one({"id": duty_id}, {"_id": 0})
+    if not duty:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    
+    # Cannot cancel if trip has started
+    if duty.get('status') in [TripStatus.STARTED, TripStatus.COMPLETED, TripStatus.BILLED, TripStatus.CLOSED]:
+        raise HTTPException(status_code=400, detail="Cannot cancel a trip that has already started or completed")
+    
+    # Cancel the trip
+    await db.duties.update_one(
+        {"id": duty_id},
+        {"$set": {
+            "status": "CANCELLED",
+            "cancelled_at": datetime.now(timezone.utc).isoformat(),
+            "cancelled_by": current_user.id,
+            "cancellation_reason": reason or "Cancelled by admin",
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Release vehicle and driver if assigned
+    if duty.get('vehicle_id'):
+        await db.vehicles.update_one({"id": duty['vehicle_id']}, {"$set": {"status": VehicleStatus.AVAILABLE}})
+    if duty.get('driver_id'):
+        await db.drivers.update_one({"id": duty['driver_id']}, {"$set": {"status": DriverStatus.AVAILABLE}})
+    
+    # Also cancel linked booking if exists
+    booking = await db.bookings.find_one({"duty_id": duty_id}, {"_id": 0})
+    if booking:
+        await db.bookings.update_one(
+            {"id": booking['id']},
+            {"$set": {
+                "status": BookingStatus.CANCELLED,
+                "cancelled_at": datetime.now(timezone.utc).isoformat(),
+                "cancelled_by": current_user.id,
+                "cancellation_reason": reason or "Cancelled by admin",
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    
+    return {"message": "Trip cancelled successfully"}
+
+# Admin Cancel Booking directly
+@api_router.patch("/bookings/{booking_id}/cancel")
+async def admin_cancel_booking(booking_id: str, reason: Optional[str] = None, current_user: User = Depends(get_current_user)):
+    booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    # Check if booking has a linked trip that has started
+    if booking.get('duty_id'):
+        duty = await db.duties.find_one({"id": booking['duty_id']}, {"_id": 0})
+        if duty and duty.get('status') in [TripStatus.STARTED, TripStatus.COMPLETED, TripStatus.BILLED, TripStatus.CLOSED]:
+            raise HTTPException(status_code=400, detail="Cannot cancel booking - trip has already started or completed")
+    
+    # Cancel booking
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {
+            "status": BookingStatus.CANCELLED,
+            "cancelled_at": datetime.now(timezone.utc).isoformat(),
+            "cancelled_by": current_user.id,
+            "cancellation_reason": reason or "Cancelled by admin",
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Also cancel linked trip
+    if booking.get('duty_id'):
+        await db.duties.update_one(
+            {"id": booking['duty_id']},
+            {"$set": {
+                "status": "CANCELLED",
+                "cancelled_at": datetime.now(timezone.utc).isoformat(),
+                "cancelled_by": current_user.id,
+                "cancellation_reason": reason or "Cancelled by admin",
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        # Release vehicle and driver
+        duty = await db.duties.find_one({"id": booking['duty_id']}, {"_id": 0})
+        if duty:
+            if duty.get('vehicle_id'):
+                await db.vehicles.update_one({"id": duty['vehicle_id']}, {"$set": {"status": VehicleStatus.AVAILABLE}})
+            if duty.get('driver_id'):
+                await db.drivers.update_one({"id": duty['driver_id']}, {"$set": {"status": DriverStatus.AVAILABLE}})
+    
+    return {"message": "Booking cancelled successfully"}
+
 # Invoices
 @api_router.get("/invoices", response_model=List[Invoice])
 async def get_invoices(current_user: User = Depends(get_current_user)):
@@ -1285,6 +1388,23 @@ async def get_invoice(invoice_id: str, current_user: User = Depends(get_current_
         invoice['contract_detail'] = contract
     
     return invoice
+
+# Send Invoice to Corporate (changes status from DRAFT to SENT)
+@api_router.patch("/invoices/{invoice_id}/send")
+async def send_invoice(invoice_id: str, current_user: User = Depends(get_current_user)):
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    if invoice.get('status') != InvoiceStatus.DRAFT:
+        raise HTTPException(status_code=400, detail="Only DRAFT invoices can be sent")
+    
+    await db.invoices.update_one(
+        {"id": invoice_id},
+        {"$set": {"status": InvoiceStatus.SENT, "sent_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": "Invoice sent to corporate client"}
 
 # Default/Fallback Rates Configuration
 class DefaultRates(BaseModel):
@@ -1873,6 +1993,120 @@ async def corporate_login(credentials: CorporateUserLogin):
 async def get_corporate_me(current_user: CorporateUser = Depends(get_current_corporate_user)):
     return current_user
 
+# Corporate Profile Update
+@api_router.put("/corporate/auth/profile")
+async def update_corporate_profile(update_data: CorporateUserUpdate, current_user: CorporateUser = Depends(get_current_corporate_user)):
+    update_fields = {}
+    if update_data.name is not None:
+        update_fields['name'] = update_data.name
+    if update_data.display_name is not None:
+        update_fields['display_name'] = update_data.display_name
+    if update_data.department is not None:
+        update_fields['department'] = update_data.department
+    
+    if update_fields:
+        await db.corporate_users.update_one(
+            {"id": current_user.id},
+            {"$set": update_fields}
+        )
+    
+    user = await db.corporate_users.find_one({"id": current_user.id}, {"_id": 0, "password": 0})
+    return user
+
+# Corporate Password Change
+@api_router.post("/corporate/auth/change-password")
+async def change_corporate_password(data: CorporatePasswordChange, current_user: CorporateUser = Depends(get_current_corporate_user)):
+    # Get user with password
+    user = await db.corporate_users.find_one({"id": current_user.id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify current password
+    if not pwd_context.verify(data.current_password, user['password']):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Hash new password
+    new_hashed = pwd_context.hash(data.new_password)
+    
+    await db.corporate_users.update_one(
+        {"id": current_user.id},
+        {"$set": {"password": new_hashed}}
+    )
+    
+    return {"message": "Password changed successfully"}
+
+# ==================== ADMIN: CORPORATE CLIENT ONBOARDING ====================
+
+@api_router.post("/admin/onboard-corporate-user")
+async def admin_onboard_corporate_user(user_data: CorporateUserCreate, current_user: User = Depends(get_current_user)):
+    """Admin creates corporate user accounts and shares credentials with them"""
+    # Verify client exists
+    client = await db.clients.find_one({"id": user_data.client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    # Check if email already exists
+    existing = await db.corporate_users.find_one({"email": user_data.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Create user
+    hashed_password = pwd_context.hash(user_data.password)
+    user = CorporateUser(
+        email=user_data.email,
+        name=user_data.name,
+        display_name=user_data.display_name,
+        client_id=user_data.client_id,
+        role=user_data.role,
+        department=user_data.department
+    )
+    
+    user_dict = user.model_dump()
+    user_dict['password'] = hashed_password
+    user_dict['created_at'] = user_dict['created_at'].isoformat()
+    
+    await db.corporate_users.insert_one(user_dict)
+    
+    # Return user info (admin will share credentials with client)
+    return {
+        "message": "Corporate user created successfully",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "role": user.role,
+            "client": client['company_name']
+        },
+        "credentials": {
+            "email": user_data.email,
+            "password": user_data.password,  # Plain password to share with client
+            "login_url": "/corporate/login"
+        }
+    }
+
+@api_router.get("/admin/corporate-users")
+async def admin_get_corporate_users(client_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
+    """Admin views all corporate users"""
+    query = {}
+    if client_id:
+        query["client_id"] = client_id
+    
+    users = await db.corporate_users.find(query, {"_id": 0, "password": 0}).to_list(1000)
+    for u in users:
+        u['created_at'] = datetime.fromisoformat(u['created_at']) if isinstance(u['created_at'], str) else u['created_at']
+        # Get client name
+        client = await db.clients.find_one({"id": u['client_id']}, {"_id": 0})
+        u['client_name'] = client['company_name'] if client else 'Unknown'
+    return users
+
+@api_router.delete("/admin/corporate-users/{user_id}")
+async def admin_delete_corporate_user(user_id: str, current_user: User = Depends(get_current_user)):
+    """Admin can delete corporate user accounts"""
+    result = await db.corporate_users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "Corporate user deleted"}
+
 # Corporate Dashboard
 @api_router.get("/corporate/dashboard/stats", response_model=CorporateDashboardStats)
 async def get_corporate_dashboard_stats(current_user: CorporateUser = Depends(get_current_corporate_user)):
@@ -2200,6 +2434,57 @@ async def get_booking(booking_id: str, current_user: CorporateUser = Depends(get
     
     return Booking(**booking)
 
+# Corporate Cancel Booking (only if 6+ hours before pickup)
+@api_router.patch("/corporate/bookings/{booking_id}/cancel")
+async def corporate_cancel_booking(booking_id: str, current_user: CorporateUser = Depends(get_current_corporate_user)):
+    booking = await db.bookings.find_one({
+        "id": booking_id,
+        "client_id": current_user.client_id
+    }, {"_id": 0})
+    
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    # Check if already cancelled or completed
+    if booking['status'] in [BookingStatus.CANCELLED, BookingStatus.COMPLETED]:
+        raise HTTPException(status_code=400, detail="Booking cannot be cancelled")
+    
+    # Check if ride has started
+    if booking['status'] == BookingStatus.IN_PROGRESS:
+        raise HTTPException(status_code=400, detail="Cannot cancel a ride in progress")
+    
+    # Check 6-hour rule
+    pickup_time = datetime.fromisoformat(booking['pickup_time']) if isinstance(booking['pickup_time'], str) else booking['pickup_time']
+    now = datetime.now(timezone.utc)
+    time_until_pickup = (pickup_time - now).total_seconds() / 3600  # hours
+    
+    if time_until_pickup < 6:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot cancel booking less than 6 hours before pickup. Time remaining: {time_until_pickup:.1f} hours"
+        )
+    
+    # Cancel booking
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {
+            "status": BookingStatus.CANCELLED,
+            "cancelled_at": datetime.now(timezone.utc).isoformat(),
+            "cancelled_by": current_user.id,
+            "cancellation_reason": "Cancelled by corporate user",
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Also cancel linked duty/trip if exists
+    if booking.get('duty_id'):
+        await db.duties.update_one(
+            {"id": booking['duty_id']},
+            {"$set": {"status": "CANCELLED", "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    
+    return {"message": "Booking cancelled successfully"}
+
 # Live Tracking (for corporate users)
 @api_router.get("/corporate/tracking/active")
 async def get_active_tracking(current_user: CorporateUser = Depends(get_current_corporate_user)):
@@ -2248,8 +2533,10 @@ async def get_active_tracking(current_user: CorporateUser = Depends(get_current_
 # Invoices (Read-only for corporate users)
 @api_router.get("/corporate/invoices")
 async def get_corporate_invoices(current_user: CorporateUser = Depends(get_current_corporate_user)):
+    # Corporate only sees SENT, PAID, and OVERDUE invoices (NOT DRAFT)
     invoices = await db.invoices.find({
-        "client_id": current_user.client_id
+        "client_id": current_user.client_id,
+        "status": {"$in": [InvoiceStatus.SENT, InvoiceStatus.PAID, InvoiceStatus.OVERDUE]}
     }, {"_id": 0}).to_list(1000)
     
     for inv in invoices:

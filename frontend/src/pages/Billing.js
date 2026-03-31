@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, Receipt, PencilSimple, FileText, X, Check } from '@phosphor-icons/react';
+import { Plus, Receipt, PencilSimple, FileText, X, Check, PaperPlaneTilt } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -154,6 +154,16 @@ const Billing = () => {
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to update invoice');
+    }
+  };
+
+  const handleSendInvoice = async (invoiceId) => {
+    try {
+      await axios.patch(`${API_BASE}/invoices/${invoiceId}/send`);
+      toast.success('Invoice sent to corporate client');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to send invoice');
     }
   };
 
@@ -311,6 +321,16 @@ const Billing = () => {
                         >
                           <PencilSimple size={18} />
                         </button>
+                        {invoice.status === 'DRAFT' && (
+                          <button
+                            onClick={() => handleSendInvoice(invoice.id)}
+                            className="p-2 text-white bg-[#00C853] hover:bg-[#00A843] transition-colors duration-150"
+                            title="Send to Corporate"
+                            data-testid={`send-invoice-${invoice.id}`}
+                          >
+                            <PaperPlaneTilt size={18} weight="bold" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

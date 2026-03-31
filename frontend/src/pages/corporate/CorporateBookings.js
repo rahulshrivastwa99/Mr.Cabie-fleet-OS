@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, Calendar, Upload, ArrowsLeftRight, CaretDown, Users } from '@phosphor-icons/react';
+import { Plus, Calendar, Upload, ArrowsLeftRight, CaretDown, Users, X } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -220,6 +220,31 @@ const CorporateBookings = () => {
     return `px-3 py-1 text-xs font-semibold uppercase tracking-wider ${classes[status] || classes.PENDING}`;
   };
 
+  const canCancelBooking = (booking) => {
+    // Cannot cancel if already cancelled or completed
+    if (['CANCELLED', 'COMPLETED', 'IN_PROGRESS'].includes(booking.status)) {
+      return false;
+    }
+    // Check 6-hour rule
+    const pickupTime = new Date(booking.pickup_time);
+    const now = new Date();
+    const hoursUntilPickup = (pickupTime - now) / (1000 * 60 * 60);
+    return hoursUntilPickup >= 6;
+  };
+
+  const handleCancelBooking = async (bookingId) => {
+    if (!window.confirm('Are you sure you want to cancel this booking?')) {
+      return;
+    }
+    try {
+      await axios.patch(`${API_BASE}/bookings/${bookingId}/cancel`);
+      toast.success('Booking cancelled successfully');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to cancel booking');
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center h-full">
@@ -336,6 +361,21 @@ const CorporateBookings = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Cancel Button */}
+                {canCancelBooking(booking) && (
+                  <div className="pt-4 border-t border-[#E5E5E5]">
+                    <button
+                      onClick={() => handleCancelBooking(booking.id)}
+                      className="px-4 py-2 text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 transition-colors duration-150 flex items-center gap-2"
+                      data-testid={`cancel-booking-${booking.id}`}
+                    >
+                      <X size={16} weight="bold" />
+                      Cancel Booking
+                    </button>
+                    <p className="text-xs text-[#525252] mt-1">Cancellation available until 6 hours before pickup</p>
+                  </div>
+                )}
               </div>
             );
           })

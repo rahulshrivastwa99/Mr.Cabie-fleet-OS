@@ -72,7 +72,7 @@ const CorporateLayout = () => {
               <UserCircle size={24} weight="regular" />
             </div>
             <div>
-              <p className="text-sm font-semibold">{user?.name}</p>
+              <p className="text-sm font-semibold">{user?.display_name || user?.name}</p>
               <p className="text-xs text-[#525252] uppercase tracking-wider">{user?.role}</p>
             </div>
           </div>
