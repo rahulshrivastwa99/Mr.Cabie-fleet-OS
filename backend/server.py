@@ -835,6 +835,25 @@ async def login(credentials: UserLogin):
     access_token = create_access_token({"sub": user_doc['id']})
     return {"access_token": access_token, "token_type": "bearer", "user": User(**user_doc).model_dump()}
 
+# Health Check Endpoint
+@api_router.get("/health")
+async def health_check():
+    """Health check endpoint for deployment readiness"""
+    try:
+        # Check MongoDB connection
+        await db.command("ping")
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "version": "1.0.0"
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "database": "disconnected",
+            "error": str(e)
+        }
+
 @api_router.get("/auth/me", response_model=User)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
