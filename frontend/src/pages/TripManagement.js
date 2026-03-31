@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, ArrowRight, FileText } from '@phosphor-icons/react';
+import { Plus, ArrowRight, FileText, X } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -139,6 +139,22 @@ const TripManagement = () => {
     } catch (error) {
       toast.error('Failed to update status');
     }
+  };
+
+  const handleCancelTrip = async (tripId) => {
+    if (!window.confirm('Are you sure you want to cancel this trip?')) return;
+    try {
+      await axios.patch(`${API_BASE}/duties/${tripId}/cancel`);
+      toast.success('Trip cancelled successfully');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to cancel trip');
+    }
+  };
+
+  const canCancelTrip = (trip) => {
+    // Admin can cancel any trip that hasn't started
+    return !['STARTED', 'COMPLETED', 'BILLED', 'CLOSED'].includes(trip.status);
   };
 
   const openAssignModal = (trip) => {
@@ -302,6 +318,17 @@ const TripManagement = () => {
                     >
                       Move to {nextStatus}
                       <ArrowRight size={16} weight="bold" />
+                    </button>
+                  )}
+                  {/* Admin Cancel Trip Button */}
+                  {canCancelTrip(trip) && (
+                    <button
+                      onClick={() => handleCancelTrip(trip.id)}
+                      className="px-4 py-2 border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-2"
+                      data-testid={`cancel-trip-${trip.id}`}
+                    >
+                      <X size={16} weight="bold" />
+                      Cancel Trip
                     </button>
                   )}
                 </div>

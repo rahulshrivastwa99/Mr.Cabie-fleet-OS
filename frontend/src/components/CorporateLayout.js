@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useCorporateAuth } from '../context/CorporateAuthContext';
+import axios from 'axios';
+import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Gauge,
   Calendar,
@@ -10,16 +13,56 @@ import {
   ChartBar,
   SignOut,
   UserCircle,
-  FileText
+  FileText,
+  Gear,
+  Eye,
+  EyeSlash
 } from '@phosphor-icons/react';
+
+const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api/corporate`;
 
 const CorporateLayout = () => {
   const { user, logout } = useCorporateAuth();
   const navigate = useNavigate();
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: ''
+  });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/corporate/login');
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    if (passwordData.new_password !== passwordData.confirm_password) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    if (passwordData.new_password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await axios.post(`${API_BASE}/auth/change-password`, {
+        current_password: passwordData.current_password,
+        new_password: passwordData.new_password
+      });
+      toast.success('Password changed successfully');
+      setShowPasswordModal(false);
+      setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to change password');
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   const navItems = [
@@ -71,10 +114,18 @@ const CorporateLayout = () => {
             <div className="w-10 h-10 rounded-sm bg-[#E5E5E5] flex items-center justify-center">
               <UserCircle size={24} weight="regular" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-sm font-semibold">{user?.display_name || user?.name}</p>
               <p className="text-xs text-[#525252] uppercase tracking-wider">{user?.role}</p>
             </div>
+            <button
+              onClick={() => setShowPasswordModal(true)}
+              className="p-2 text-[#525252] hover:text-[#0047FF] hover:bg-[#F5F5F5] transition-colors"
+              title="Settings"
+              data-testid="corporate-settings-button"
+            >
+              <Gear size={18} />
+            </button>
           </div>
           <button
             onClick={handleLogout}
@@ -90,6 +141,96 @@ const CorporateLayout = () => {
       <main className="flex-1 overflow-auto">
         <Outlet />
       </main>
+
+      {/* Change Password Modal */}
+      <Dialog open={showPasswordModal} onOpenChange={setShowPasswordModal}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold tracking-tight">Change Password</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handlePasswordChange} className="space-y-4 mt-4">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                Current Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  value={passwordData.current_password}
+                  onChange={(e) => setPasswordData({ ...passwordData, current_password: e.target.value })}
+                  className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm pr-10"
+                  required
+                  data-testid="current-password-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#525252] hover:text-[#0A0A0A]"
+                >
+                  {showCurrentPassword ? <EyeSlash size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                New Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={passwordData.new_password}
+                  onChange={(e) => setPasswordData({ ...passwordData, new_password: e.target.value })}
+                  className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm pr-10"
+                  required
+                  minLength={6}
+                  data-testid="new-password-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#525252] hover:text-[#0A0A0A]"
+                >
+                  {showNewPassword ? <EyeSlash size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+                Confirm New Password
+              </label>
+              <input
+                type="password"
+                value={passwordData.confirm_password}
+                onChange={(e) => setPasswordData({ ...passwordData, confirm_password: e.target.value })}
+                className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
+                required
+                minLength={6}
+                data-testid="confirm-password-input"
+              />
+            </div>
+            <div className="flex gap-3 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
+                }}
+                className="flex-1 px-4 py-2 border border-[#E5E5E5] text-sm font-medium hover:bg-[#F5F5F5] transition-colors duration-150"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={changingPassword}
+                className="flex-1 px-4 py-2 bg-[#0047FF] text-white text-sm font-semibold hover:bg-[#003BCC] transition-colors duration-150 disabled:opacity-50"
+                data-testid="save-password-button"
+              >
+                {changingPassword ? 'Changing...' : 'Change Password'}
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
