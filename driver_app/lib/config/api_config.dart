@@ -1,6 +1,13 @@
 class ApiConfig {
-  // TODO: Update this URL for production
-  static const String baseUrl = 'https://fleet-os-preview-1.preview.emergentagent.com/api';
+  // Backend URL - Update this before building for production
+  // For development: Use your local or preview URL
+  // For production: Update to your production domain
+  // 
+  // Build with custom URL: flutter build apk --dart-define=API_BASE_URL=https://your-domain.com/api
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://fleet-os-preview-1.preview.emergentagent.com/api'
+  );
   
   // API Endpoints
   static const String sendOtp = '/driver/auth/send-otp';
