@@ -324,7 +324,50 @@ class DutySlipSign(BaseModel):
     passenger_signature: str  # Base64 signature
     signed_by: str  # Passenger name
 
-# ==================== CONTRACT MODEL ====================
+# ==================== CONTRACT MODEL (REVISED) ====================
+
+# Vehicle Rate Card (per vehicle category)
+class VehicleRateCard(BaseModel):
+    vehicle_category: str  # e.g., "SEDAN", "SUV", "PREMIUM_SUV"
+    vehicle_examples: Optional[str] = None  # e.g., "Dzire, Xcent, Etios"
+    
+    # Local Packages
+    local_4hr_40km: Optional[float] = None
+    local_8hr_80km: Optional[float] = None
+    local_12hr_120km: Optional[float] = None
+    local_extra_km: Optional[float] = None
+    local_extra_hour: Optional[float] = None
+    
+    # Outstation
+    outstation_per_km: Optional[float] = None
+    outstation_min_km_per_day: Optional[float] = 300
+    outstation_driver_allowance: Optional[float] = None
+    
+    # Monthly Rental
+    monthly_rental: Optional[float] = None
+    monthly_included_km: Optional[float] = None
+    monthly_extra_km: Optional[float] = None
+
+# Fixed Route Package
+class FixedRoutePackage(BaseModel):
+    route_name: str  # e.g., "Rudrapur → Delhi"
+    from_location: str
+    to_location: str
+    one_way_rates: dict = {}  # {SEDAN: 4000, SUV: 5200, PREMIUM_SUV: 9500}
+    round_trip_rates: dict = {}  # Same structure
+    includes_toll: bool = True
+    notes: Optional[str] = None
+
+# Extra Charges Configuration
+class ExtraChargesConfig(BaseModel):
+    driver_night_allowance: Optional[float] = 250  # Per night
+    waiting_charge_per_hour: Optional[float] = 100  # After 12 hours
+    gst_percentage: float = 5
+    toll_included: bool = False
+    parking_included: bool = False
+    state_tax_included: bool = False
+    permit_included: bool = False
+    notes: Optional[str] = None  # e.g., "Fuel price fluctuation clause"
 
 class Contract(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -338,7 +381,16 @@ class Contract(BaseModel):
     end_date: datetime
     billing_cycle: BillingCycle = BillingCycle.MONTHLY
     
-    # Pricing Configuration
+    # NEW: Vehicle Rate Cards (multiple vehicle categories)
+    vehicle_rate_cards: List[dict] = []  # List of VehicleRateCard
+    
+    # NEW: Fixed Route Packages
+    fixed_routes: List[dict] = []  # List of FixedRoutePackage
+    
+    # NEW: Extra Charges Configuration
+    extra_charges_config: Optional[dict] = None  # ExtraChargesConfig
+    
+    # Legacy Pricing Configuration (for backward compatibility)
     # Fixed Monthly
     monthly_amount: Optional[float] = None
     included_days: Optional[int] = None
@@ -365,8 +417,11 @@ class Contract(BaseModel):
     base_monthly_amount: Optional[float] = None
     usage_rate_per_km: Optional[float] = None
     
-    # Vehicle Type specific rates
+    # Vehicle Type specific rates (legacy)
     vehicle_rates: List[dict] = []  # [{vehicle_type, rate_multiplier}]
+    
+    # PDF Source (if uploaded)
+    source_pdf_url: Optional[str] = None
     
     is_active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -380,7 +435,12 @@ class ContractCreate(BaseModel):
     end_date: datetime
     billing_cycle: BillingCycle = BillingCycle.MONTHLY
     
-    # Optional pricing fields
+    # NEW: Vehicle Rate Cards
+    vehicle_rate_cards: Optional[List[dict]] = []
+    fixed_routes: Optional[List[dict]] = []
+    extra_charges_config: Optional[dict] = None
+    
+    # Optional legacy pricing fields
     monthly_amount: Optional[float] = None
     included_days: Optional[int] = None
     included_km: Optional[float] = None
@@ -396,6 +456,7 @@ class ContractCreate(BaseModel):
     base_monthly_amount: Optional[float] = None
     usage_rate_per_km: Optional[float] = None
     vehicle_rates: Optional[List[dict]] = []
+    source_pdf_url: Optional[str] = None
 
 class Invoice(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -442,6 +503,16 @@ class InvoiceCreate(BaseModel):
     extra_charges: Optional[List[dict]] = []  # [{name, amount, description}]
     gst_percentage: float = 18.0
     due_days: int = 30
+    
+    # NEW: Manual Pricing Itemized Breakdown
+    is_manual_pricing: bool = False
+    manual_line_items: Optional[List[dict]] = []  # [{description, amount}]
+    manual_base_fare: Optional[float] = None
+    manual_toll: Optional[float] = None
+    manual_parking: Optional[float] = None
+    manual_driver_allowance: Optional[float] = None
+    manual_extras: Optional[float] = None
+    manual_total: Optional[float] = None
     
     # Legacy fields
     duties: Optional[List[str]] = []
@@ -1302,6 +1373,84 @@ async def create_invoice(invoice_data: InvoiceCreate, current_user: User = Depen
     if invoice_data.amount is not None and base_amount == 0:
         base_amount = invoice_data.amount
     
+    # NEW: Manual Pricing Support
+    if invoice_data.is_manual_pricing:
+        # Use manual itemized breakdown
+        line_items = []
+        base_amount = 0
+        
+        if invoice_data.manual_base_fare:
+            base_amount += invoice_data.manual_base_fare
+            line_items.append({
+                "description": "Base Fare",
+                "quantity": 1,
+                "rate": invoice_data.manual_base_fare,
+                "amount": invoice_data.manual_base_fare
+            })
+        
+        if invoice_data.manual_toll:
+            base_amount += invoice_data.manual_toll
+            line_items.append({
+                "description": "Toll Charges",
+                "quantity": 1,
+                "rate": invoice_data.manual_toll,
+                "amount": invoice_data.manual_toll
+            })
+        
+        if invoice_data.manual_parking:
+            base_amount += invoice_data.manual_parking
+            line_items.append({
+                "description": "Parking Charges",
+                "quantity": 1,
+                "rate": invoice_data.manual_parking,
+                "amount": invoice_data.manual_parking
+            })
+        
+        if invoice_data.manual_driver_allowance:
+            base_amount += invoice_data.manual_driver_allowance
+            line_items.append({
+                "description": "Driver Allowance",
+                "quantity": 1,
+                "rate": invoice_data.manual_driver_allowance,
+                "amount": invoice_data.manual_driver_allowance
+            })
+        
+        if invoice_data.manual_extras:
+            base_amount += invoice_data.manual_extras
+            line_items.append({
+                "description": "Extra Charges",
+                "quantity": 1,
+                "rate": invoice_data.manual_extras,
+                "amount": invoice_data.manual_extras
+            })
+        
+        # Add custom line items if provided
+        if invoice_data.manual_line_items:
+            for item in invoice_data.manual_line_items:
+                item_amount = item.get('amount', 0)
+                base_amount += item_amount
+                line_items.append({
+                    "description": item.get('description', 'Custom Charge'),
+                    "quantity": 1,
+                    "rate": item_amount,
+                    "amount": item_amount
+                })
+        
+        # If manual_total is provided, use it directly (override calculation)
+        if invoice_data.manual_total and invoice_data.manual_total > 0:
+            # Calculate difference and add as adjustment if needed
+            calculated = base_amount
+            if calculated != invoice_data.manual_total:
+                diff = invoice_data.manual_total - calculated
+                base_amount = invoice_data.manual_total
+                if diff != 0:
+                    line_items.append({
+                        "description": "Adjustment",
+                        "quantity": 1,
+                        "rate": diff,
+                        "amount": diff
+                    })
+    
     # Calculate extra charges
     extra_charges = invoice_data.extra_charges or []
     extra_charges_amount = sum(ec.get('amount', 0) for ec in extra_charges)
@@ -1579,6 +1728,149 @@ async def get_active_contract(client_id: str, current_user: User = Depends(get_c
     contract['created_at'] = datetime.fromisoformat(contract['created_at'])
     contract['updated_at'] = datetime.fromisoformat(contract['updated_at'])
     return {"contract": Contract(**contract)}
+
+# ==================== PDF QUOTATION EXTRACTION ====================
+
+@api_router.post("/contracts/extract-from-pdf")
+async def extract_rates_from_pdf(
+    pdf_url: str = None,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Extract vehicle rate cards and pricing from a PDF quotation using AI.
+    Returns structured data that can be used to create a contract.
+    """
+    if not pdf_url:
+        raise HTTPException(status_code=400, detail="PDF URL is required")
+    
+    try:
+        import httpx
+        import tempfile
+        import os
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+        
+        # Download the PDF to a temp file
+        async with httpx.AsyncClient() as client:
+            response = await client.get(pdf_url)
+            if response.status_code != 200:
+                raise HTTPException(status_code=400, detail="Failed to download PDF")
+            
+            # Save to temp file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                tmp.write(response.content)
+                tmp_path = tmp.name
+        
+        try:
+            # Initialize LLM with Gemini (supports file attachments)
+            llm_key = os.environ.get('EMERGENT_LLM_KEY')
+            if not llm_key:
+                raise HTTPException(status_code=500, detail="LLM key not configured")
+            
+            chat = LlmChat(
+                api_key=llm_key,
+                session_id=f"pdf-extract-{uuid.uuid4()}",
+                system_message="""You are an expert at extracting structured data from fleet quotation PDFs.
+                Extract all pricing information and return it as valid JSON."""
+            ).with_model("gemini", "gemini-2.5-flash")
+            
+            # Create file attachment
+            pdf_file = FileContentWithMimeType(
+                file_path=tmp_path,
+                mime_type="application/pdf"
+            )
+            
+            extraction_prompt = """Extract ALL pricing information from this quotation PDF and return ONLY valid JSON (no markdown, no explanation).
+
+The JSON structure should be:
+{
+  "vehicle_rate_cards": [
+    {
+      "vehicle_category": "SEDAN" | "SUV" | "PREMIUM_SUV" | "HATCHBACK" | "EV" | "LUXURY",
+      "vehicle_examples": "Dzire, Xcent, Etios",
+      "local_4hr_40km": number or null,
+      "local_8hr_80km": number or null,
+      "local_12hr_120km": number or null,
+      "local_extra_km": number or null,
+      "local_extra_hour": number or null,
+      "outstation_per_km": number or null,
+      "outstation_min_km_per_day": number or null (usually 250-300),
+      "outstation_driver_allowance": number or null,
+      "monthly_rental": number or null,
+      "monthly_included_km": number or null,
+      "monthly_extra_km": number or null
+    }
+  ],
+  "fixed_routes": [
+    {
+      "route_name": "Delhi to Rudrapur",
+      "from_location": "Delhi",
+      "to_location": "Rudrapur",
+      "one_way_rates": {"SEDAN": 4000, "SUV": 5200, "PREMIUM_SUV": 9500},
+      "round_trip_rates": {"SEDAN": 7000, "SUV": 9000, "PREMIUM_SUV": 17000},
+      "includes_toll": true,
+      "notes": null
+    }
+  ],
+  "extra_charges_config": {
+    "driver_night_allowance": number or null,
+    "waiting_charge_per_hour": number or null (after 12 hours),
+    "gst_percentage": 5,
+    "toll_included": false,
+    "parking_included": false,
+    "state_tax_included": false,
+    "permit_included": false,
+    "notes": "Any special notes like fuel price fluctuation clause"
+  },
+  "company_name": "Client company name from the quotation",
+  "validity_period": "Validity period if mentioned"
+}
+
+Extract ALL vehicle categories, ALL routes, and ALL extra charges mentioned in the PDF.
+Return ONLY the JSON object, no other text."""
+
+            user_message = UserMessage(
+                text=extraction_prompt,
+                file_contents=[pdf_file]
+            )
+            
+            response = await chat.send_message(user_message)
+            
+            # Clean up temp file
+            os.unlink(tmp_path)
+            
+            # Parse JSON response
+            import json
+            try:
+                # Remove any markdown code blocks if present
+                clean_response = response.strip()
+                if clean_response.startswith("```"):
+                    clean_response = clean_response.split("```")[1]
+                    if clean_response.startswith("json"):
+                        clean_response = clean_response[4:]
+                clean_response = clean_response.strip()
+                
+                extracted_data = json.loads(clean_response)
+                return {
+                    "success": True,
+                    "extracted_data": extracted_data,
+                    "source_pdf_url": pdf_url
+                }
+            except json.JSONDecodeError as e:
+                return {
+                    "success": False,
+                    "error": f"Failed to parse AI response as JSON: {str(e)}",
+                    "raw_response": response[:500]
+                }
+                
+        except Exception as e:
+            # Clean up temp file on error
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise e
+            
+    except Exception as e:
+        logger.error(f"PDF extraction error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"PDF extraction failed: {str(e)}")
 
 # ==================== DUTY SLIP API ENDPOINTS ====================
 

@@ -33,6 +33,17 @@ const Billing = () => {
   const [editLineItems, setEditLineItems] = useState([]);
   const [editExtraCharges, setEditExtraCharges] = useState([]);
   const [editGst, setEditGst] = useState(18);
+  
+  // Manual Pricing State
+  const [isManualPricing, setIsManualPricing] = useState(false);
+  const [manualPricing, setManualPricing] = useState({
+    base_fare: '',
+    toll: '',
+    parking: '',
+    driver_allowance: '',
+    extras: '',
+    custom_items: []
+  });
 
   useEffect(() => {
     fetchData();
@@ -61,6 +72,57 @@ const Billing = () => {
   const handleClientChange = (clientId) => {
     setGenerateForm({ ...generateForm, client_id: clientId, contract_id: '' });
     setSelectedSlips([]);
+    
+    // Check if client's contract is MANUAL type
+    const clientContracts = contracts.filter(c => c.client_id === clientId && c.is_active);
+    if (clientContracts.length > 0 && clientContracts[0].contract_type === 'MANUAL') {
+      setIsManualPricing(true);
+    } else {
+      setIsManualPricing(false);
+    }
+  };
+
+  const handleContractChange = (contractId) => {
+    setGenerateForm({ ...generateForm, contract_id: contractId });
+    const contract = contracts.find(c => c.id === contractId);
+    if (contract?.contract_type === 'MANUAL') {
+      setIsManualPricing(true);
+    } else {
+      setIsManualPricing(false);
+    }
+  };
+
+  const addManualCustomItem = () => {
+    setManualPricing({
+      ...manualPricing,
+      custom_items: [...manualPricing.custom_items, { description: '', amount: '' }]
+    });
+  };
+
+  const updateManualCustomItem = (index, field, value) => {
+    const updated = [...manualPricing.custom_items];
+    updated[index][field] = value;
+    setManualPricing({ ...manualPricing, custom_items: updated });
+  };
+
+  const removeManualCustomItem = (index) => {
+    setManualPricing({
+      ...manualPricing,
+      custom_items: manualPricing.custom_items.filter((_, i) => i !== index)
+    });
+  };
+
+  const calculateManualTotal = () => {
+    let total = 0;
+    if (manualPricing.base_fare) total += parseFloat(manualPricing.base_fare) || 0;
+    if (manualPricing.toll) total += parseFloat(manualPricing.toll) || 0;
+    if (manualPricing.parking) total += parseFloat(manualPricing.parking) || 0;
+    if (manualPricing.driver_allowance) total += parseFloat(manualPricing.driver_allowance) || 0;
+    if (manualPricing.extras) total += parseFloat(manualPricing.extras) || 0;
+    manualPricing.custom_items.forEach(item => {
+      total += parseFloat(item.amount) || 0;
+    });
+    return total;
   };
 
   const toggleSlipSelection = (slipId) => {
