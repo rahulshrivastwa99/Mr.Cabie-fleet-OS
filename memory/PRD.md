@@ -116,7 +116,7 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 - **Corporate Pages**: CorporateDutySlips with monthly summary
 - **APIs**: Full CRUD for contracts, duty slips, invoice generation
 
-### Session 6: Admin Onboarding + Corporate Self-Service (Dec 31, 2025 - CURRENT)
+### Session 6: Admin Onboarding + Corporate Self-Service (Dec 31, 2025)
 - **Client Management Upgrade**:
   - Added tabs: "Clients" and "Corporate Users"
   - Corporate User creation form with role/department/password generation
@@ -167,6 +167,28 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
   - PATCH `/api/admin/vehicles/{id}/status` - Admin update vehicle status
   - Validation: Cannot set to ON_LEAVE/INACTIVE if driver has active trips
 
+### Session 8: Advanced Features - Contract PDF Extraction, Manual Pricing, Trip Filters (Apr 5, 2026 - CURRENT)
+- **Manual Pricing in Invoice Generation** (COMPLETE):
+  - Itemized breakdown UI: Base Fare, Toll, Parking, Driver Allowance, Extras
+  - Custom line items with "+ Add Custom Item" button
+  - Live subtotal calculation before GST
+  - Toggle: "Enable itemized manual pricing" checkbox when no contract selected
+  - Backend supports `is_manual_pricing`, `manual_base_fare`, `manual_toll`, `manual_parking`, `manual_driver_allowance`, `manual_extras`, `manual_line_items`
+  
+- **Contract PDF Upload with AI Rate Extraction** (COMPLETE):
+  - "Import from Quotation PDF" section in Create Contract modal
+  - Enter PDF URL and click "Extract Rates"
+  - Uses `emergentintegrations` library with Gemini for AI extraction
+  - Auto-populates: Vehicle Rate Cards, Fixed Routes, Extra Charges Config
+  - API: `POST /api/contracts/extract-from-pdf`
+  
+- **Trip Management Filters** (COMPLETE):
+  - Quick filters: All Trips, Today's Trips, Ongoing, Unassigned, Completed Today, Upcoming (Next 7 Days)
+  - Dropdown filters: Company, Status, Sort By
+  - Search input for passenger, phone, location
+  - "More Filters" panel with Driver and Date Range filters
+  - "Clear All" button to reset filters
+
 ---
 
 ## Driver App Setup Instructions
@@ -201,7 +223,7 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 ## Future Tasks (P2 - Backlog)
 1. **Auto Assignment Engine** - Proximity-based driver assignment
 2. **Deep Analytics** - Fleet utilization, driver performance, cost analysis
-3. **Backend Refactoring** - Split server.py (3400+ lines) into modular routers (/app/backend/routes/)
+3. **Backend Refactoring** - Split server.py (3800+ lines) into modular routers (/app/backend/routes/)
 4. **Invoice PDF Download** - Generate downloadable PDF invoices
 
 ---
@@ -215,9 +237,11 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
 - **Backend**: FastAPI (Python 3.11), MongoDB
 - **Frontend**: React 18, Tailwind CSS, shadcn/ui
 - **Mobile**: Flutter (driver_app ready, passenger_app planned)
+- **AI/PDF Extraction**: emergentintegrations library with Gemini
 
 ## Key API Endpoints
 - Admin: `/api/trips`, `/api/duty-slips`, `/api/contracts`, `/api/invoices`, `/api/admin/drivers/{id}/status`, `/api/admin/drivers/locations`
 - Corporate: `/api/corporate/duty-slips`, `/api/corporate/tracking/active`, `/api/corporate/auth/change-password`
 - Driver: `/api/driver/auth/*`, `/api/driver/trips/*`, `/api/driver/location`
 - Invoice Generation: `/api/invoices/generate-from-slips`
+- Contract PDF Extraction: `POST /api/contracts/extract-from-pdf`
