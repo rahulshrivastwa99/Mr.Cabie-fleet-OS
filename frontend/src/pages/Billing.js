@@ -160,7 +160,19 @@ const Billing = () => {
         billing_period_end: generateForm.billing_period_end ? new Date(generateForm.billing_period_end).toISOString() : undefined,
         extra_charges: extraCharges.filter(ec => ec.name && ec.amount > 0),
         gst_percentage: generateForm.gst_percentage,
-        due_days: generateForm.due_days
+        due_days: generateForm.due_days,
+        // Manual Pricing Fields
+        is_manual_pricing: isManualPricing,
+        manual_base_fare: isManualPricing && manualPricing.base_fare ? parseFloat(manualPricing.base_fare) : undefined,
+        manual_toll: isManualPricing && manualPricing.toll ? parseFloat(manualPricing.toll) : undefined,
+        manual_parking: isManualPricing && manualPricing.parking ? parseFloat(manualPricing.parking) : undefined,
+        manual_driver_allowance: isManualPricing && manualPricing.driver_allowance ? parseFloat(manualPricing.driver_allowance) : undefined,
+        manual_extras: isManualPricing && manualPricing.extras ? parseFloat(manualPricing.extras) : undefined,
+        manual_line_items: isManualPricing ? manualPricing.custom_items.filter(item => item.description && item.amount).map(item => ({
+          description: item.description,
+          amount: parseFloat(item.amount) || 0
+        })) : undefined,
+        manual_total: isManualPricing ? calculateManualTotal() : undefined
       };
       
       await axios.post(`${API_BASE}/invoices`, payload);
@@ -184,6 +196,15 @@ const Billing = () => {
     });
     setSelectedSlips([]);
     setExtraCharges([]);
+    setIsManualPricing(false);
+    setManualPricing({
+      base_fare: '',
+      toll: '',
+      parking: '',
+      driver_allowance: '',
+      extras: '',
+      custom_items: []
+    });
   };
 
   const openViewModal = async (invoice) => {
@@ -431,7 +452,7 @@ const Billing = () => {
                 <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
                   Contract (Optional)
                 </label>
-                <Select value={generateForm.contract_id || 'none'} onValueChange={(value) => setGenerateForm({ ...generateForm, contract_id: value === 'none' ? '' : value })}>
+                <Select value={generateForm.contract_id || 'none'} onValueChange={(value) => handleContractChange(value === 'none' ? '' : value)}>
                   <SelectTrigger data-testid="invoice-contract-select">
                     <SelectValue placeholder="Select contract for pricing" />
                   </SelectTrigger>
@@ -444,6 +465,17 @@ const Billing = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                {/* Manual Pricing Toggle */}
+                {!generateForm.contract_id && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <Checkbox
+                      checked={isManualPricing}
+                      onCheckedChange={setIsManualPricing}
+                      data-testid="manual-pricing-toggle"
+                    />
+                    <label className="text-xs text-[#525252]">Enable itemized manual pricing</label>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -525,6 +557,134 @@ const Billing = () => {
                     </p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Manual Pricing Section - Shows when contract type is MANUAL or no contract selected */}
+            {isManualPricing && selectedSlips.length > 0 && (
+              <div className="p-4 bg-[#FFF8E1] border border-[#FFB300]" data-testid="manual-pricing-section">
+                <div className="flex items-center gap-2 mb-4">
+                  <Receipt size={20} className="text-[#FF9800]" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-[#525252]">
+                    Manual Pricing Breakdown
+                  </h3>
+                </div>
+                <p className="text-xs text-[#525252] mb-4">
+                  Enter itemized amounts for this invoice. All amounts will be totaled and GST applied.
+                </p>
+                
+                {/* Standard Charge Items */}
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="text-xs text-[#525252] mb-1 block">Base Fare (₹)</label>
+                    <input
+                      type="number"
+                      value={manualPricing.base_fare}
+                      onChange={(e) => setManualPricing({ ...manualPricing, base_fare: e.target.value })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-[#E5E5E5] text-sm focus:outline-none focus:ring-2 focus:ring-[#FF9800]"
+                      data-testid="manual-base-fare"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#525252] mb-1 block">Toll Charges (₹)</label>
+                    <input
+                      type="number"
+                      value={manualPricing.toll}
+                      onChange={(e) => setManualPricing({ ...manualPricing, toll: e.target.value })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-[#E5E5E5] text-sm focus:outline-none focus:ring-2 focus:ring-[#FF9800]"
+                      data-testid="manual-toll"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#525252] mb-1 block">Parking Charges (₹)</label>
+                    <input
+                      type="number"
+                      value={manualPricing.parking}
+                      onChange={(e) => setManualPricing({ ...manualPricing, parking: e.target.value })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-[#E5E5E5] text-sm focus:outline-none focus:ring-2 focus:ring-[#FF9800]"
+                      data-testid="manual-parking"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#525252] mb-1 block">Driver Allowance (₹)</label>
+                    <input
+                      type="number"
+                      value={manualPricing.driver_allowance}
+                      onChange={(e) => setManualPricing({ ...manualPricing, driver_allowance: e.target.value })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-[#E5E5E5] text-sm focus:outline-none focus:ring-2 focus:ring-[#FF9800]"
+                      data-testid="manual-driver-allowance"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#525252] mb-1 block">Other Extras (₹)</label>
+                    <input
+                      type="number"
+                      value={manualPricing.extras}
+                      onChange={(e) => setManualPricing({ ...manualPricing, extras: e.target.value })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-[#E5E5E5] text-sm focus:outline-none focus:ring-2 focus:ring-[#FF9800]"
+                      data-testid="manual-extras"
+                    />
+                  </div>
+                </div>
+                
+                {/* Custom Line Items */}
+                <div className="mb-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-[#525252]">
+                      Custom Items
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addManualCustomItem}
+                      className="text-xs text-[#FF9800] font-semibold hover:underline"
+                    >
+                      + Add Custom Item
+                    </button>
+                  </div>
+                  {manualPricing.custom_items.map((item, idx) => (
+                    <div key={idx} className="grid grid-cols-3 gap-2 mb-2">
+                      <input
+                        type="text"
+                        value={item.description}
+                        onChange={(e) => updateManualCustomItem(idx, 'description', e.target.value)}
+                        placeholder="Description"
+                        className="col-span-2 px-3 py-2 border border-[#E5E5E5] text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={item.amount}
+                          onChange={(e) => updateManualCustomItem(idx, 'amount', e.target.value)}
+                          placeholder="Amount"
+                          className="flex-1 px-3 py-2 border border-[#E5E5E5] text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeManualCustomItem(idx)}
+                          className="px-2 py-2 text-red-500 hover:bg-red-50"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Total Preview */}
+                <div className="mt-4 pt-4 border-t border-[#FFB300]">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-[#525252]">Subtotal (Before GST):</span>
+                    <span className="text-lg font-bold text-[#FF9800]" data-testid="manual-subtotal">
+                      ₹{calculateManualTotal().toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#525252] mt-1">GST @ {generateForm.gst_percentage}% will be added</p>
+                </div>
               </div>
             )}
 
