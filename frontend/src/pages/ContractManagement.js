@@ -68,6 +68,7 @@ const ContractManagement = () => {
   const [expandedContract, setExpandedContract] = useState(null);
   const [extracting, setExtracting] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
+  const [pdfFile, setPdfFile] = useState(null);
   
   // Basic form data
   const [formData, setFormData] = useState({
@@ -143,6 +144,7 @@ const ContractManagement = () => {
     });
     setEditingContract(null);
     setPdfUrl('');
+    setPdfFile(null);
   };
 
   // Extract rates from PDF
@@ -204,6 +206,78 @@ const ContractManagement = () => {
         setFormData(prev => ({ ...prev, source_pdf_url: pdfUrl }));
         
         toast.success(`Extracted ${data.vehicle_rate_cards?.length || 0} vehicle categories and ${data.fixed_routes?.length || 0} routes`);
+      } else {
+        toast.error(response.data.error || 'Failed to extract rates');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to extract rates from PDF');
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  // Extract rates from uploaded PDF file
+  const handleExtractFromFile = async () => {
+    if (!pdfFile) {
+      toast.error('Please select a PDF file');
+      return;
+    }
+    
+    setExtracting(true);
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', pdfFile);
+      
+      const response = await axios.post(`${API_BASE}/contracts/extract-from-upload`, formDataUpload, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      if (response.data.success) {
+        const data = response.data.extracted_data;
+        
+        // Populate vehicle rate cards
+        if (data.vehicle_rate_cards?.length > 0) {
+          setVehicleRateCards(data.vehicle_rate_cards.map(card => ({
+            ...emptyRateCard,
+            ...card,
+            local_4hr_40km: card.local_4hr_40km || '',
+            local_8hr_80km: card.local_8hr_80km || '',
+            local_12hr_120km: card.local_12hr_120km || '',
+            local_extra_km: card.local_extra_km || '',
+            local_extra_hour: card.local_extra_hour || '',
+            outstation_per_km: card.outstation_per_km || '',
+            outstation_min_km_per_day: card.outstation_min_km_per_day || '300',
+            outstation_driver_allowance: card.outstation_driver_allowance || '',
+            monthly_rental: card.monthly_rental || '',
+            monthly_included_km: card.monthly_included_km || '',
+            monthly_extra_km: card.monthly_extra_km || ''
+          })));
+        }
+        
+        // Populate fixed routes
+        if (data.fixed_routes?.length > 0) {
+          setFixedRoutes(data.fixed_routes);
+        }
+        
+        // Populate extra charges config
+        if (data.extra_charges_config) {
+          setExtraChargesConfig(prev => ({
+            ...prev,
+            ...data.extra_charges_config,
+            driver_night_allowance: data.extra_charges_config.driver_night_allowance || '250',
+            waiting_charge_per_hour: data.extra_charges_config.waiting_charge_per_hour || '100',
+            gst_percentage: data.extra_charges_config.gst_percentage || '5'
+          }));
+        }
+        
+        // Set contract name from company if available
+        if (data.company_name && !formData.name) {
+          setFormData(prev => ({ ...prev, name: `${data.company_name} Contract` }));
+        }
+        
+        toast.success(`Extracted ${data.vehicle_rate_cards?.length || 0} vehicle categories and ${data.fixed_routes?.length || 0} routes from ${pdfFile.name}`);
       } else {
         toast.error(response.data.error || 'Failed to extract rates');
       }
@@ -553,25 +627,64 @@ const ContractManagement = () => {
                 <FilePdf size={20} className="text-red-500" />
                 <span className="text-sm font-semibold">Import from Quotation PDF</span>
               </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Enter PDF URL (e.g., https://example.com/quotation.pdf)"
-                  value={pdfUrl}
-                  onChange={(e) => setPdfUrl(e.target.value)}
-                  className="flex-1 px-4 py-2 border border-[#E5E5E5] text-sm focus:outline-none focus:ring-2 focus:ring-[#0047FF]"
-                />
-                <button
-                  type="button"
-                  onClick={handleExtractFromPdf}
-                  disabled={extracting || !pdfUrl}
-                  className="px-4 py-2 bg-[#0047FF] text-white text-sm font-semibold hover:bg-[#003BCC] disabled:opacity-50 flex items-center gap-2"
-                >
-                  {extracting ? <SpinnerGap size={18} className="animate-spin" /> : <Upload size={18} />}
-                  {extracting ? 'Extracting...' : 'Extract Rates'}
-                </button>
+              
+              {/* File Upload Option */}
+              <div className="mb-3">
+                <label className="text-xs font-medium text-[#525252] mb-1 block">Upload PDF File</label>
+                <div className="flex gap-2">
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={(e) => setPdfFile(e.target.files[0])}
+                    className="flex-1 px-3 py-2 border border-[#E5E5E5] text-sm bg-white file:mr-3 file:py-1 file:px-3 file:border-0 file:text-sm file:font-medium file:bg-[#0047FF] file:text-white file:cursor-pointer"
+                    data-testid="pdf-file-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleExtractFromFile}
+                    disabled={extracting || !pdfFile}
+                    className="px-4 py-2 bg-[#0047FF] text-white text-sm font-semibold hover:bg-[#003BCC] disabled:opacity-50 flex items-center gap-2"
+                    data-testid="extract-from-file-btn"
+                  >
+                    {extracting ? <SpinnerGap size={18} className="animate-spin" /> : <Upload size={18} />}
+                    {extracting ? 'Extracting...' : 'Extract'}
+                  </button>
+                </div>
               </div>
-              <p className="text-xs text-[#525252] mt-2">Upload a quotation PDF to auto-extract vehicle rates and routes</p>
+              
+              {/* OR Divider */}
+              <div className="flex items-center gap-3 my-3">
+                <div className="flex-1 border-t border-[#E5E5E5]"></div>
+                <span className="text-xs text-[#525252] font-medium">OR</span>
+                <div className="flex-1 border-t border-[#E5E5E5]"></div>
+              </div>
+              
+              {/* URL Option */}
+              <div>
+                <label className="text-xs font-medium text-[#525252] mb-1 block">Enter PDF URL</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="https://example.com/quotation.pdf"
+                    value={pdfUrl}
+                    onChange={(e) => setPdfUrl(e.target.value)}
+                    className="flex-1 px-4 py-2 border border-[#E5E5E5] text-sm focus:outline-none focus:ring-2 focus:ring-[#0047FF]"
+                    data-testid="pdf-url-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleExtractFromPdf}
+                    disabled={extracting || !pdfUrl}
+                    className="px-4 py-2 bg-[#0047FF] text-white text-sm font-semibold hover:bg-[#003BCC] disabled:opacity-50 flex items-center gap-2"
+                    data-testid="extract-from-url-btn"
+                  >
+                    {extracting ? <SpinnerGap size={18} className="animate-spin" /> : <Upload size={18} />}
+                    {extracting ? 'Extracting...' : 'Extract'}
+                  </button>
+                </div>
+              </div>
+              
+              <p className="text-xs text-[#525252] mt-3">AI will automatically extract vehicle rates, routes, and charges from your quotation</p>
             </div>
 
             {/* Basic Info */}

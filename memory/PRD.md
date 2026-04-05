@@ -176,11 +176,14 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
   - Backend supports `is_manual_pricing`, `manual_base_fare`, `manual_toll`, `manual_parking`, `manual_driver_allowance`, `manual_extras`, `manual_line_items`
   
 - **Contract PDF Upload with AI Rate Extraction** (COMPLETE):
-  - "Import from Quotation PDF" section in Create Contract modal
-  - Enter PDF URL and click "Extract Rates"
+  - **NEW: File Upload Option** - "Choose File" button for direct PDF upload
+  - URL option remains available for remote PDFs
   - Uses `emergentintegrations` library with Gemini for AI extraction
   - Auto-populates: Vehicle Rate Cards, Fixed Routes, Extra Charges Config
-  - API: `POST /api/contracts/extract-from-pdf`
+  - APIs: 
+    - `POST /api/contracts/extract-from-upload` (file upload)
+    - `POST /api/contracts/extract-from-pdf` (URL)
+  - Tested with real quotation (Perfetti Van Melle) - extracted 4 vehicle categories, 3 routes
   
 - **Trip Management Filters** (COMPLETE):
   - Quick filters: All Trips, Today's Trips, Ongoing, Unassigned, Completed Today, Upcoming (Next 7 Days)

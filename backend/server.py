@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -1870,6 +1870,141 @@ Return ONLY the JSON object, no other text."""
             
     except Exception as e:
         logger.error(f"PDF extraction error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"PDF extraction failed: {str(e)}")
+
+@api_router.post("/contracts/extract-from-upload")
+async def extract_rates_from_upload(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Extract vehicle rate cards and pricing from an uploaded PDF quotation using AI.
+    Returns structured data that can be used to create a contract.
+    """
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    
+    try:
+        import tempfile
+        import os
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+        
+        # Save uploaded file to temp
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+        
+        try:
+            # Initialize LLM with Gemini (supports file attachments)
+            llm_key = os.environ.get('EMERGENT_LLM_KEY')
+            if not llm_key:
+                raise HTTPException(status_code=500, detail="LLM key not configured")
+            
+            chat = LlmChat(
+                api_key=llm_key,
+                session_id=f"pdf-extract-{uuid.uuid4()}",
+                system_message="""You are an expert at extracting structured data from fleet quotation PDFs.
+                Extract all pricing information and return it as valid JSON."""
+            ).with_model("gemini", "gemini-2.5-flash")
+            
+            # Create file attachment
+            pdf_file = FileContentWithMimeType(
+                file_path=tmp_path,
+                mime_type="application/pdf"
+            )
+            
+            extraction_prompt = """Extract ALL pricing information from this quotation PDF and return ONLY valid JSON (no markdown, no explanation).
+
+The JSON structure should be:
+{
+  "vehicle_rate_cards": [
+    {
+      "vehicle_category": "SEDAN" | "SUV" | "PREMIUM_SUV" | "HATCHBACK" | "EV" | "LUXURY",
+      "vehicle_examples": "Dzire, Xcent, Etios",
+      "local_4hr_40km": number or null,
+      "local_8hr_80km": number or null,
+      "local_12hr_120km": number or null,
+      "local_extra_km": number or null,
+      "local_extra_hour": number or null,
+      "outstation_per_km": number or null,
+      "outstation_min_km_per_day": number or null (usually 250-300),
+      "outstation_driver_allowance": number or null,
+      "monthly_rental": number or null,
+      "monthly_included_km": number or null,
+      "monthly_extra_km": number or null
+    }
+  ],
+  "fixed_routes": [
+    {
+      "route_name": "Delhi to Rudrapur",
+      "from_location": "Delhi",
+      "to_location": "Rudrapur",
+      "one_way_rates": {"SEDAN": 4000, "SUV": 5200, "PREMIUM_SUV": 9500},
+      "round_trip_rates": {"SEDAN": 7000, "SUV": 9000, "PREMIUM_SUV": 17000},
+      "includes_toll": true,
+      "notes": null
+    }
+  ],
+  "extra_charges_config": {
+    "driver_night_allowance": number or null,
+    "waiting_charge_per_hour": number or null (after 12 hours),
+    "gst_percentage": 5,
+    "toll_included": false,
+    "parking_included": false,
+    "state_tax_included": false,
+    "permit_included": false,
+    "notes": "Any special notes like fuel price fluctuation clause"
+  },
+  "company_name": "Client company name from the quotation",
+  "validity_period": "Validity period if mentioned"
+}
+
+Extract ALL vehicle categories, ALL routes, and ALL extra charges mentioned in the PDF.
+Return ONLY the JSON object, no other text."""
+
+            user_message = UserMessage(
+                text=extraction_prompt,
+                file_contents=[pdf_file]
+            )
+            
+            response = await chat.send_message(user_message)
+            
+            # Clean up temp file
+            os.unlink(tmp_path)
+            
+            # Parse JSON response
+            import json
+            try:
+                # Remove any markdown code blocks if present
+                clean_response = response.strip()
+                if clean_response.startswith("```"):
+                    clean_response = clean_response.split("```")[1]
+                    if clean_response.startswith("json"):
+                        clean_response = clean_response[4:]
+                clean_response = clean_response.strip()
+                
+                extracted_data = json.loads(clean_response)
+                return {
+                    "success": True,
+                    "extracted_data": extracted_data,
+                    "source_filename": file.filename
+                }
+            except json.JSONDecodeError as e:
+                return {
+                    "success": False,
+                    "error": f"Failed to parse AI response as JSON: {str(e)}",
+                    "raw_response": response[:500]
+                }
+                
+        except Exception as e:
+            # Clean up temp file on error
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise e
+            
+    except Exception as e:
+        logger.error(f"PDF upload extraction error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"PDF extraction failed: {str(e)}")
 
 # ==================== DUTY SLIP API ENDPOINTS ====================
