@@ -28,6 +28,11 @@ import CorporateInvoices from './pages/corporate/CorporateInvoices';
 import CorporateReports from './pages/corporate/CorporateReports';
 import CorporateDutySlips from './pages/corporate/CorporateDutySlips';
 
+// Driver Portal Imports
+import DriverLogin from './pages/driver/DriverLogin';
+import DriverDashboard from './pages/driver/DriverDashboard';
+import DriverActiveTrip from './pages/driver/DriverActiveTrip';
+
 import './App.css';
 
 function App() {
@@ -61,6 +66,11 @@ function App() {
               <Route path="invoices" element={<CorporateInvoices />} />
               <Route path="reports" element={<CorporateReports />} />
             </Route>
+
+            {/* Driver Portal Routes */}
+            <Route path="/driver" element={<DriverLogin />} />
+            <Route path="/driver/dashboard" element={<DriverDashboard />} />
+            <Route path="/driver/trip/:tripId/active" element={<DriverActiveTrip />} />
           </Routes>
           <Toaster position="top-right" richColors />
         </CorporateAuthProvider>

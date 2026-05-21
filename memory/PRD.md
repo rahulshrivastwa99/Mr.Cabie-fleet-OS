@@ -192,7 +192,7 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
   - "More Filters" panel with Driver and Date Range filters
   - "Clear All" button to reset filters
 
-### Session 9: Real-World Operational Flexibility (May 21, 2026 - CURRENT)
+### Session 9: Real-World Operational Flexibility (May 21, 2026)
 - **Contract Enhancements** (COMPLETE):
   - Vehicle Rate Cards: Added **"Driver Allowance/Day"** field for local packages (₹/day)
   - Fixed Routes: Added **"Max KM Included"** field to specify included kilometers per route
@@ -205,6 +205,47 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
   - Invoice can be generated with ONLY manual trip entries (no duty slips required)
   - Backend stores `manual_trip_entries` and `is_manual_invoice` flag for audit trail
   - Existing duty slip-based invoice generation still works
+
+### Session 10: Driver Web Portal + Integrations (May 21, 2026 - CURRENT)
+- **Driver Web Portal at /driver** (COMPLETE):
+  - Mobile-first dark theme design
+  - OTP Login via **Twilio SMS** (real SMS integration)
+  - Driver must be pre-registered by Admin
+  - Dashboard with trip stats (New, Active, Done)
+  - Trip cards with Accept/Reject/Start/Continue actions
+  - Real-time location tracking (sends to backend every 30s)
+  - Active Trip page with:
+    - Passenger info + call button
+    - Pickup/Drop locations with "Navigate" (opens Google Maps)
+    - Start KM / End KM entry
+    - Complete Trip triggers Duty Slip modal
+
+- **Enterprise-Grade Duty Slip Workflow** (COMPLETE):
+  - **Traveller Name Field** (mandatory) - filled by traveller for legal record
+  - **Digital Signature Pad** - touch/mouse drawing
+  - Trip summary (Start KM, End KM, Total Distance, Date)
+  - Legal warning before submission
+  - Signature stored as Base64 in database
+  - `traveller_name` stored separately for audit trail
+
+- **Google Maps Integration** (COMPLETE):
+  - **Places Autocomplete** in all booking forms
+  - Corporate Bookings: Pickup/Dropoff with lat/lng capture
+  - Admin Trip Creation: Pickup/Dropoff with lat/lng capture
+  - Restricted to India (componentRestrictions: 'in')
+  - "Powered by Google" attribution
+
+- **Twilio SMS Integration** (COMPLETE):
+  - Real OTP delivery to driver phones
+  - Fallback to debug OTP if SMS fails
+  - Phone number formatted with +91 prefix
+
+---
+
+## Integration Credentials (Configured)
+- **Twilio SMS**: Account SID, Auth Token, Phone Number (+15732615539)
+- **Google Maps**: API Key for Places Autocomplete
+- **Emergent LLM**: For PDF Rate Extraction
 
 ---
 

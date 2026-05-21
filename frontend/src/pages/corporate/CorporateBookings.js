@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCorporateAuth } from '../../context/CorporateAuthContext';
 import CSVUploader from '../../components/CSVUploader';
+import LocationAutocomplete from '../../components/LocationAutocomplete';
 
 const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api/corporate`;
 const ADMIN_API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -457,34 +458,40 @@ const CorporateBookings = () => {
 
             {/* Location Fields */}
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
-                  Pickup Location
-                </label>
-                <input
-                  type="text"
-                  value={formData.pickup_location}
-                  onChange={(e) => setFormData({ ...formData, pickup_location: e.target.value })}
-                  className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
-                  required
-                  placeholder="e.g., Sector 62 Noida"
-                  data-testid="pickup-input"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
-                  Dropoff Location
-                </label>
-                <input
-                  type="text"
-                  value={formData.dropoff_location}
-                  onChange={(e) => setFormData({ ...formData, dropoff_location: e.target.value })}
-                  className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
-                  required
-                  placeholder="e.g., IGI Airport T3"
-                  data-testid="dropoff-input"
-                />
-              </div>
+              <LocationAutocomplete
+                label="Pickup Location"
+                value={formData.pickup_location}
+                onChange={(value) => setFormData({ ...formData, pickup_location: value })}
+                onPlaceSelect={(place) => {
+                  if (place) {
+                    setFormData({ 
+                      ...formData, 
+                      pickup_location: place.address,
+                      pickup_lat: place.lat,
+                      pickup_lng: place.lng
+                    });
+                  }
+                }}
+                placeholder="Search pickup location..."
+                required
+              />
+              <LocationAutocomplete
+                label="Dropoff Location"
+                value={formData.dropoff_location}
+                onChange={(value) => setFormData({ ...formData, dropoff_location: value })}
+                onPlaceSelect={(place) => {
+                  if (place) {
+                    setFormData({ 
+                      ...formData, 
+                      dropoff_location: place.address,
+                      dropoff_lat: place.lat,
+                      dropoff_lng: place.lng
+                    });
+                  }
+                }}
+                placeholder="Search dropoff location..."
+                required
+              />
             </div>
 
             {/* Time Fields */}

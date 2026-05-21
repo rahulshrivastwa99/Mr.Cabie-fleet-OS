@@ -272,22 +272,22 @@ class DutySlip(BaseModel):
     client_id: str
     
     # Trip Info
-    date: datetime
+    date: Optional[datetime] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    trip_type: TripType = TripType.ONE_WAY
+    trip_type: Optional[TripType] = TripType.ONE_WAY
     
     # Driver & Vehicle
     driver_id: str
-    driver_name: str
-    vehicle_id: str
-    vehicle_number: str
-    vehicle_type: VehicleType
+    driver_name: Optional[str] = None
+    vehicle_id: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    vehicle_type: Optional[VehicleType] = None
     
     # Client Info
-    corporate_name: str
-    pickup_location: str
-    dropoff_location: str
+    corporate_name: Optional[str] = None
+    pickup_location: Optional[str] = None
+    dropoff_location: Optional[str] = None
     
     # Meter Reading
     opening_km: float
@@ -295,7 +295,8 @@ class DutySlip(BaseModel):
     total_km: Optional[float] = None  # Auto-calculated
     
     # Passengers
-    passenger_name: str
+    passenger_name: Optional[str] = None
+    traveller_name: Optional[str] = None  # Name of person who signed (legal record)
     passengers: List[dict] = []  # [{name, phone}]
     
     # Status & Signature
@@ -607,6 +608,7 @@ class TripActionRequest(BaseModel):
     closing_km: Optional[float] = None
     driver_remarks: Optional[str] = None
     passenger_signature: Optional[str] = None  # Base64 encoded
+    traveller_name: Optional[str] = None  # Name of the person travelling (for duty slip)
 
 class DriverStatusUpdate(BaseModel):
     status: DriverStatus
@@ -2041,7 +2043,7 @@ async def get_duty_slips(
     
     duty_slips = await db.duty_slips.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     for ds in duty_slips:
-        ds['date'] = datetime.fromisoformat(ds['date']) if isinstance(ds['date'], str) else ds['date']
+        ds['date'] = datetime.fromisoformat(ds['date']) if ds.get('date') and isinstance(ds['date'], str) else (ds.get('date') or datetime.now(timezone.utc).strftime('%Y-%m-%d'))
         if ds.get('start_time'):
             ds['start_time'] = datetime.fromisoformat(ds['start_time']) if isinstance(ds['start_time'], str) else ds['start_time']
         if ds.get('end_time'):
@@ -2122,7 +2124,7 @@ async def get_duty_slip(slip_id: str, current_user: User = Depends(get_current_u
     if not ds:
         raise HTTPException(status_code=404, detail="Duty slip not found")
     
-    ds['date'] = datetime.fromisoformat(ds['date']) if isinstance(ds['date'], str) else ds['date']
+    ds['date'] = datetime.fromisoformat(ds['date']) if ds.get('date') and isinstance(ds['date'], str) else (ds.get('date') or datetime.now(timezone.utc).strftime('%Y-%m-%d'))
     if ds.get('start_time'):
         ds['start_time'] = datetime.fromisoformat(ds['start_time']) if isinstance(ds['start_time'], str) else ds['start_time']
     if ds.get('end_time'):
@@ -2198,7 +2200,7 @@ async def get_duty_slip_by_trip(trip_id: str, current_user: User = Depends(get_c
     if not ds:
         return {"duty_slip": None}
     
-    ds['date'] = datetime.fromisoformat(ds['date']) if isinstance(ds['date'], str) else ds['date']
+    ds['date'] = datetime.fromisoformat(ds['date']) if ds.get('date') and isinstance(ds['date'], str) else (ds.get('date') or datetime.now(timezone.utc).strftime('%Y-%m-%d'))
     if ds.get('start_time'):
         ds['start_time'] = datetime.fromisoformat(ds['start_time']) if isinstance(ds['start_time'], str) else ds['start_time']
     if ds.get('end_time'):
@@ -3230,7 +3232,7 @@ async def get_corporate_duty_slips(
     
     duty_slips = await db.duty_slips.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     for ds in duty_slips:
-        ds['date'] = datetime.fromisoformat(ds['date']) if isinstance(ds['date'], str) else ds['date']
+        ds['date'] = datetime.fromisoformat(ds['date']) if ds.get('date') and isinstance(ds['date'], str) else (ds.get('date') or datetime.now(timezone.utc).strftime('%Y-%m-%d'))
         if ds.get('start_time'):
             ds['start_time'] = datetime.fromisoformat(ds['start_time']) if isinstance(ds['start_time'], str) else ds['start_time']
         if ds.get('end_time'):
@@ -3247,7 +3249,7 @@ async def get_corporate_duty_slip(slip_id: str, current_user: CorporateUser = De
     if not ds:
         raise HTTPException(status_code=404, detail="Duty slip not found")
     
-    ds['date'] = datetime.fromisoformat(ds['date']) if isinstance(ds['date'], str) else ds['date']
+    ds['date'] = datetime.fromisoformat(ds['date']) if ds.get('date') and isinstance(ds['date'], str) else (ds.get('date') or datetime.now(timezone.utc).strftime('%Y-%m-%d'))
     if ds.get('start_time'):
         ds['start_time'] = datetime.fromisoformat(ds['start_time']) if isinstance(ds['start_time'], str) else ds['start_time']
     if ds.get('end_time'):
@@ -3335,13 +3337,17 @@ driver_otps = {}
 # Driver Authentication
 @api_router.post("/driver/auth/send-otp")
 async def driver_send_otp(data: DriverOTPRequest):
-    """Send OTP to driver's phone number"""
+    """Send OTP to driver's phone number via Twilio SMS"""
     # Find driver by phone
     driver = await db.drivers.find_one({"phone": data.phone}, {"_id": 0})
     if not driver:
-        raise HTTPException(status_code=404, detail="Driver not found with this phone number")
+        raise HTTPException(status_code=404, detail="Driver not found. Please contact your fleet operator to register.")
     
-    # Generate 6-digit OTP (in production, send via Twilio)
+    # Check driver status
+    if driver.get('status') == 'INACTIVE':
+        raise HTTPException(status_code=403, detail="Your account is inactive. Please contact your fleet operator.")
+    
+    # Generate 6-digit OTP
     import random
     otp = str(random.randint(100000, 999999))
     
@@ -3352,15 +3358,46 @@ async def driver_send_otp(data: DriverOTPRequest):
         "driver_id": driver['id']
     }
     
-    # In production: Send OTP via Twilio SMS
-    # For now, we'll return it (REMOVE IN PRODUCTION)
-    logger.info(f"OTP for {data.phone}: {otp}")
+    # Send OTP via Twilio SMS
+    twilio_sid = os.environ.get('TWILIO_ACCOUNT_SID')
+    twilio_token = os.environ.get('TWILIO_AUTH_TOKEN')
+    twilio_phone = os.environ.get('TWILIO_PHONE_NUMBER')
     
-    return {
-        "message": "OTP sent successfully",
+    sms_sent = False
+    if twilio_sid and twilio_token and twilio_phone:
+        try:
+            from twilio.rest import Client
+            client = Client(twilio_sid, twilio_token)
+            
+            # Format phone number for India (+91)
+            phone_to_send = data.phone
+            if not phone_to_send.startswith('+'):
+                phone_to_send = '+91' + phone_to_send.lstrip('0')
+            
+            message = client.messages.create(
+                body=f"Your Fleet OS Driver login OTP is: {otp}. Valid for 5 minutes. Do not share with anyone.",
+                from_=twilio_phone,
+                to=phone_to_send
+            )
+            sms_sent = True
+            logger.info(f"OTP SMS sent to {phone_to_send}, SID: {message.sid}")
+        except Exception as e:
+            logger.error(f"Twilio SMS failed: {str(e)}")
+            # Fall back to debug mode if Twilio fails
+            sms_sent = False
+    
+    response = {
+        "message": "OTP sent successfully" if sms_sent else "OTP generated (SMS service unavailable)",
         "phone": data.phone,
-        "debug_otp": otp  # REMOVE IN PRODUCTION
+        "sms_sent": sms_sent
     }
+    
+    # Include debug OTP only if SMS wasn't sent (for testing)
+    if not sms_sent:
+        response["debug_otp"] = otp
+        logger.info(f"DEBUG OTP for {data.phone}: {otp}")
+    
+    return response
 
 @api_router.post("/driver/auth/verify-otp")
 async def driver_verify_otp(data: DriverOTPVerify):
@@ -3569,15 +3606,32 @@ async def driver_start_trip(
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found or cannot be started")
     
-    # Create duty slip
+    # Get additional info for duty slip
+    vehicle = None
+    if trip.get('vehicle_id'):
+        vehicle = await db.vehicles.find_one({"id": trip['vehicle_id']}, {"_id": 0})
+    
+    client = await db.clients.find_one({"id": trip['client_id']}, {"_id": 0})
+    
+    # Create duty slip with all required fields
     duty_slip_id = str(uuid.uuid4())
     duty_slip = {
         "id": duty_slip_id,
         "trip_id": trip_id,
         "client_id": trip['client_id'],
         "driver_id": current_driver['id'],
+        "driver_name": current_driver.get('name', 'Driver'),
         "vehicle_id": trip.get('vehicle_id'),
+        "vehicle_number": vehicle.get('registration_number', 'N/A') if vehicle else 'N/A',
+        "vehicle_type": vehicle.get('type', 'SEDAN') if vehicle else 'SEDAN',
         "contract_id": trip.get('contract_id'),
+        "corporate_name": client.get('company_name', 'Client') if client else 'Client',
+        "pickup_location": trip.get('pickup_location', 'Pickup Location'),
+        "dropoff_location": trip.get('drop_location', 'Drop Location'),
+        "passenger_name": trip.get('passenger_name', 'Passenger'),
+        "passengers": trip.get('passengers', []),
+        "trip_type": trip.get('booking_type', 'ONE_WAY'),
+        "date": datetime.now(timezone.utc).isoformat(),
         "opening_km": data.opening_km,
         "closing_km": None,
         "total_km": None,
@@ -3586,6 +3640,8 @@ async def driver_start_trip(
         "end_time": None,
         "driver_remarks": data.driver_remarks,
         "passenger_signature": None,
+        "traveller_name": None,
+        "note": "Additional charges (Toll, Parking, Taxes, GST) will be added in final invoice",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
@@ -3628,11 +3684,13 @@ async def driver_complete_trip(
     data: TripActionRequest,
     current_driver: dict = Depends(get_current_driver)
 ):
-    """Complete a trip - closes duty slip with closing KM and signature"""
+    """Complete a trip - closes duty slip with closing KM, traveller name and signature"""
     if not data.closing_km:
         raise HTTPException(status_code=400, detail="Closing KM is required")
     if not data.passenger_signature:
         raise HTTPException(status_code=400, detail="Passenger signature is required")
+    if not data.traveller_name or not data.traveller_name.strip():
+        raise HTTPException(status_code=400, detail="Traveller name is required for legal record")
     
     trip = await db.duties.find_one({
         "id": trip_id,
@@ -3656,7 +3714,7 @@ async def driver_complete_trip(
     
     total_km = data.closing_km - duty_slip['opening_km']
     
-    # Update duty slip
+    # Update duty slip with traveller name
     await db.duty_slips.update_one(
         {"id": trip['duty_slip_id']},
         {"$set": {
@@ -3665,6 +3723,7 @@ async def driver_complete_trip(
             "status": "SIGNED",
             "end_time": datetime.now(timezone.utc).isoformat(),
             "passenger_signature": data.passenger_signature,
+            "traveller_name": data.traveller_name.strip(),  # Store traveller name
             "driver_remarks": data.driver_remarks or duty_slip.get('driver_remarks'),
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
