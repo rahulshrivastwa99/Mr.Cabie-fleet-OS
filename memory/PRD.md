@@ -167,7 +167,7 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
   - PATCH `/api/admin/vehicles/{id}/status` - Admin update vehicle status
   - Validation: Cannot set to ON_LEAVE/INACTIVE if driver has active trips
 
-### Session 8: Advanced Features - Contract PDF Extraction, Manual Pricing, Trip Filters (Apr 5, 2026 - CURRENT)
+### Session 8: Advanced Features - Contract PDF Extraction, Manual Pricing, Trip Filters (Apr 5, 2026)
 - **Manual Pricing in Invoice Generation** (COMPLETE):
   - Itemized breakdown UI: Base Fare, Toll, Parking, Driver Allowance, Extras
   - Custom line items with "+ Add Custom Item" button
@@ -191,6 +191,20 @@ Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet manageme
   - Search input for passenger, phone, location
   - "More Filters" panel with Driver and Date Range filters
   - "Clear All" button to reset filters
+
+### Session 9: Real-World Operational Flexibility (May 21, 2026 - CURRENT)
+- **Contract Enhancements** (COMPLETE):
+  - Vehicle Rate Cards: Added **"Driver Allowance/Day"** field for local packages (₹/day)
+  - Fixed Routes: Added **"Max KM Included"** field to specify included kilometers per route
+  
+- **Billing - Manual Invoice Creation WITHOUT Duty Slips** (COMPLETE):
+  - **Problem Solved**: Clients sometimes forget to sign duty slips - now admin can still invoice
+  - **MANUAL TRIP ENTRIES** section when manual pricing enabled
+  - Add Trip button adds entry form: Date, Passenger Name, Pickup, Dropoff, KM, Description, Amount
+  - Manual Trips Total calculated and displayed separately
+  - Invoice can be generated with ONLY manual trip entries (no duty slips required)
+  - Backend stores `manual_trip_entries` and `is_manual_invoice` flag for audit trail
+  - Existing duty slip-based invoice generation still works
 
 ---
 
