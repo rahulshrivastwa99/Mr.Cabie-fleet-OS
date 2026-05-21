@@ -40,6 +40,7 @@ const emptyRateCard = {
   local_12hr_120km: '',
   local_extra_km: '',
   local_extra_hour: '',
+  local_driver_allowance: '',  // Daily driver allowance for local packages
   outstation_per_km: '',
   outstation_min_km_per_day: '300',
   outstation_driver_allowance: '',
@@ -54,6 +55,7 @@ const emptyFixedRoute = {
   to_location: '',
   one_way_rates: {},
   round_trip_rates: {},
+  max_km_included: '',  // Max KM included in the fixed route price
   includes_toll: true,
   notes: ''
 };
@@ -814,6 +816,16 @@ const ContractManagement = () => {
                           placeholder="To (e.g., Rudrapur)"
                           className="w-32 px-2 py-1 border border-[#E5E5E5] text-sm"
                         />
+                        <div className="flex items-center gap-2 ml-4">
+                          <span className="text-xs text-[#525252]">Max KM:</span>
+                          <input
+                            type="number"
+                            value={route.max_km_included || ''}
+                            onChange={(e) => handleUpdateRoute(idx, 'max_km_included', e.target.value)}
+                            placeholder="KM"
+                            className="w-16 px-2 py-1 border border-[#E5E5E5] text-sm"
+                          />
+                        </div>
                         <button type="button" onClick={() => handleDeleteRoute(idx)} className="text-red-500 ml-auto">
                           <Trash size={18} />
                         </button>
@@ -956,6 +968,10 @@ const ContractManagement = () => {
                 <div>
                   <label className="text-xs text-[#525252] mb-1 block">Extra Hour</label>
                   <input type="number" value={rateCardForm.local_extra_hour} onChange={(e) => setRateCardForm({ ...rateCardForm, local_extra_hour: e.target.value })} className="w-full px-3 py-2 border border-[#E5E5E5] text-sm" placeholder="₹/hr" />
+                </div>
+                <div>
+                  <label className="text-xs text-[#525252] mb-1 block">Driver Allowance/Day</label>
+                  <input type="number" value={rateCardForm.local_driver_allowance} onChange={(e) => setRateCardForm({ ...rateCardForm, local_driver_allowance: e.target.value })} className="w-full px-3 py-2 border border-[#E5E5E5] text-sm" placeholder="₹/day" />
                 </div>
               </div>
             </div>

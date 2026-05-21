@@ -478,6 +478,10 @@ class Invoice(BaseModel):
     # Extra Charges (Admin only: Toll, Parking, GST, etc.)
     extra_charges: List[dict] = []  # [{name, amount, description}]
     
+    # Manual Trip Entries (for invoices without duty slips - real-world flexibility)
+    manual_trip_entries: List[dict] = []  # [{date, passenger_name, pickup, dropoff, km, amount, description}]
+    is_manual_invoice: bool = False  # Flag to indicate if invoice was created manually
+    
     # Amounts
     base_amount: float = 0  # From contract calculation
     extra_charges_amount: float = 0  # Sum of extra charges
@@ -513,6 +517,9 @@ class InvoiceCreate(BaseModel):
     manual_driver_allowance: Optional[float] = None
     manual_extras: Optional[float] = None
     manual_total: Optional[float] = None
+    
+    # Manual Trip Entries (for invoices without duty slips)
+    manual_trip_entries: Optional[List[dict]] = []  # [{date, passenger_name, pickup, dropoff, km, amount, description}]
     
     # Legacy fields
     duties: Optional[List[str]] = []
@@ -1471,6 +1478,8 @@ async def create_invoice(invoice_data: InvoiceCreate, current_user: User = Depen
         billing_period_end=invoice_data.billing_period_end,
         line_items=line_items or invoice_data.line_items or [],
         extra_charges=extra_charges,
+        manual_trip_entries=invoice_data.manual_trip_entries or [],
+        is_manual_invoice=invoice_data.is_manual_pricing,
         base_amount=base_amount,
         extra_charges_amount=extra_charges_amount,
         subtotal=subtotal,

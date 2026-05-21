@@ -44,6 +44,9 @@ const Billing = () => {
     extras: '',
     custom_items: []
   });
+  
+  // Manual Trip Entry (for invoices without duty slips)
+  const [manualTrips, setManualTrips] = useState([]);
 
   useEffect(() => {
     fetchData();
@@ -147,15 +150,24 @@ const Billing = () => {
 
   const handleGenerateInvoice = async (e) => {
     e.preventDefault();
-    if (selectedSlips.length === 0) {
-      toast.error('Please select at least one duty slip');
+    
+    // Allow invoice without duty slips ONLY if manual pricing is enabled
+    if (selectedSlips.length === 0 && !isManualPricing) {
+      toast.error('Please select at least one duty slip, or enable manual pricing');
       return;
     }
+    
+    // If manual pricing, require at least some amount entered
+    if (isManualPricing && calculateManualTotal() === 0 && manualTrips.length === 0) {
+      toast.error('Please enter pricing details or add manual trip entries');
+      return;
+    }
+    
     try {
       const payload = {
         client_id: generateForm.client_id,
         contract_id: generateForm.contract_id || undefined,
-        duty_slip_ids: selectedSlips,
+        duty_slip_ids: selectedSlips.length > 0 ? selectedSlips : [],
         billing_period_start: generateForm.billing_period_start ? new Date(generateForm.billing_period_start).toISOString() : undefined,
         billing_period_end: generateForm.billing_period_end ? new Date(generateForm.billing_period_end).toISOString() : undefined,
         extra_charges: extraCharges.filter(ec => ec.name && ec.amount > 0),
@@ -168,11 +180,20 @@ const Billing = () => {
         manual_parking: isManualPricing && manualPricing.parking ? parseFloat(manualPricing.parking) : undefined,
         manual_driver_allowance: isManualPricing && manualPricing.driver_allowance ? parseFloat(manualPricing.driver_allowance) : undefined,
         manual_extras: isManualPricing && manualPricing.extras ? parseFloat(manualPricing.extras) : undefined,
-        manual_line_items: isManualPricing ? manualPricing.custom_items.filter(item => item.description && item.amount).map(item => ({
-          description: item.description,
-          amount: parseFloat(item.amount) || 0
-        })) : undefined,
-        manual_total: isManualPricing ? calculateManualTotal() : undefined
+        manual_line_items: isManualPricing ? [
+          ...manualPricing.custom_items.filter(item => item.description && item.amount).map(item => ({
+            description: item.description,
+            amount: parseFloat(item.amount) || 0
+          })),
+          // Add manual trips as line items
+          ...manualTrips.filter(trip => trip.description).map(trip => ({
+            description: `${trip.description}${trip.date ? ` (${trip.date})` : ''}${trip.km ? ` - ${trip.km} km` : ''}`,
+            amount: parseFloat(trip.amount) || 0
+          }))
+        ] : undefined,
+        manual_total: isManualPricing ? calculateManualTotal() + manualTrips.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) : undefined,
+        // Store manual trip details for record-keeping
+        manual_trip_entries: isManualPricing && manualTrips.length > 0 ? manualTrips : undefined
       };
       
       await axios.post(`${API_BASE}/invoices`, payload);
@@ -205,6 +226,34 @@ const Billing = () => {
       extras: '',
       custom_items: []
     });
+    setManualTrips([]);
+  };
+  
+  // Manual Trip Entry Helpers
+  const addManualTrip = () => {
+    setManualTrips([...manualTrips, { 
+      description: '', 
+      date: '', 
+      passenger_name: '',
+      pickup: '',
+      dropoff: '',
+      km: '',
+      amount: '' 
+    }]);
+  };
+  
+  const updateManualTrip = (index, field, value) => {
+    const updated = [...manualTrips];
+    updated[index][field] = value;
+    setManualTrips(updated);
+  };
+  
+  const removeManualTrip = (index) => {
+    setManualTrips(manualTrips.filter((_, i) => i !== index));
+  };
+  
+  const calculateManualTripsTotal = () => {
+    return manualTrips.reduce((sum, trip) => sum + (parseFloat(trip.amount) || 0), 0);
   };
 
   const openViewModal = async (invoice) => {
@@ -557,11 +606,129 @@ const Billing = () => {
                     </p>
                   </div>
                 )}
+                
+                {/* No Duty Slips Warning with Manual Option */}
+                {clientSlips.length === 0 && isManualPricing && (
+                  <div className="mt-2 p-3 bg-[#FFF8E1] border border-[#FF9800]">
+                    <p className="text-sm text-[#FF9800]">
+                      <strong>No signed duty slips found.</strong> You can still create an invoice by adding manual trip entries below.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Manual Pricing Section - Shows when contract type is MANUAL or no contract selected */}
-            {isManualPricing && selectedSlips.length > 0 && (
+            {/* Manual Trip Entry Section - For trips without duty slips */}
+            {isManualPricing && generateForm.client_id && (
+              <div className="p-4 bg-[#E8F5E9] border border-[#4CAF50]" data-testid="manual-trip-entry-section">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Plus size={20} className="text-[#4CAF50]" />
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-[#525252]">
+                      Manual Trip Entries
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addManualTrip}
+                    className="text-xs text-[#4CAF50] font-semibold hover:underline flex items-center gap-1"
+                    data-testid="add-manual-trip-btn"
+                  >
+                    <Plus size={14} /> Add Trip
+                  </button>
+                </div>
+                <p className="text-xs text-[#525252] mb-4">
+                  For trips where duty slips weren't signed or recorded. Add trip details manually for billing.
+                </p>
+                
+                {manualTrips.length === 0 ? (
+                  <div className="text-center py-4 text-sm text-[#525252]">
+                    No manual trips added. Click "Add Trip" to enter trip details.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {manualTrips.map((trip, idx) => (
+                      <div key={idx} className="p-3 bg-white border border-[#E5E5E5] rounded">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-xs font-semibold text-[#4CAF50]">Trip #{idx + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeManualTrip(idx)}
+                            className="text-red-500 hover:bg-red-50 p-1"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          <input
+                            type="date"
+                            value={trip.date}
+                            onChange={(e) => updateManualTrip(idx, 'date', e.target.value)}
+                            className="px-2 py-1 border border-[#E5E5E5] text-sm"
+                            placeholder="Date"
+                          />
+                          <input
+                            type="text"
+                            value={trip.passenger_name}
+                            onChange={(e) => updateManualTrip(idx, 'passenger_name', e.target.value)}
+                            placeholder="Passenger Name"
+                            className="px-2 py-1 border border-[#E5E5E5] text-sm"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          <input
+                            type="text"
+                            value={trip.pickup}
+                            onChange={(e) => updateManualTrip(idx, 'pickup', e.target.value)}
+                            placeholder="Pickup Location"
+                            className="px-2 py-1 border border-[#E5E5E5] text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={trip.dropoff}
+                            onChange={(e) => updateManualTrip(idx, 'dropoff', e.target.value)}
+                            placeholder="Drop-off Location"
+                            className="px-2 py-1 border border-[#E5E5E5] text-sm"
+                          />
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <input
+                            type="number"
+                            value={trip.km}
+                            onChange={(e) => updateManualTrip(idx, 'km', e.target.value)}
+                            placeholder="KM"
+                            className="px-2 py-1 border border-[#E5E5E5] text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={trip.description}
+                            onChange={(e) => updateManualTrip(idx, 'description', e.target.value)}
+                            placeholder="Description/Notes"
+                            className="px-2 py-1 border border-[#E5E5E5] text-sm"
+                          />
+                          <input
+                            type="number"
+                            value={trip.amount}
+                            onChange={(e) => updateManualTrip(idx, 'amount', e.target.value)}
+                            placeholder="Amount ₹"
+                            className="px-2 py-1 border border-[#E5E5E5] text-sm font-semibold"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {/* Manual Trips Total */}
+                    <div className="mt-2 pt-2 border-t border-[#4CAF50] flex justify-between">
+                      <span className="text-sm font-semibold text-[#525252]">Manual Trips Total:</span>
+                      <span className="text-sm font-bold text-[#4CAF50]">₹{calculateManualTripsTotal().toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Manual Pricing Section - Shows when manual pricing is enabled */}
+            {isManualPricing && generateForm.client_id && (
               <div className="p-4 bg-[#FFF8E1] border border-[#FFB300]" data-testid="manual-pricing-section">
                 <div className="flex items-center gap-2 mb-4">
                   <Receipt size={20} className="text-[#FF9800]" />
@@ -677,10 +844,24 @@ const Billing = () => {
                 
                 {/* Total Preview */}
                 <div className="mt-4 pt-4 border-t border-[#FFB300]">
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm text-[#525252]">Manual Pricing Total:</span>
+                    <span className="text-sm font-semibold text-[#FF9800]">
+                      ₹{calculateManualTotal().toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  {manualTrips.length > 0 && (
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm text-[#525252]">Manual Trips Total:</span>
+                      <span className="text-sm font-semibold text-[#4CAF50]">
+                        ₹{calculateManualTripsTotal().toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center pt-2 border-t border-[#FFB300]">
                     <span className="text-sm font-semibold text-[#525252]">Subtotal (Before GST):</span>
                     <span className="text-lg font-bold text-[#FF9800]" data-testid="manual-subtotal">
-                      ₹{calculateManualTotal().toLocaleString('en-IN')}
+                      ₹{(calculateManualTotal() + calculateManualTripsTotal()).toLocaleString('en-IN')}
                     </span>
                   </div>
                   <p className="text-xs text-[#525252] mt-1">GST @ {generateForm.gst_percentage}% will be added</p>
