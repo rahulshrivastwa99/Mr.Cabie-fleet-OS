@@ -61,6 +61,7 @@ class TripStatus(str, Enum):
     COMPLETED = "COMPLETED"
     BILLED = "BILLED"
     CLOSED = "CLOSED"
+    CANCELLED = "CANCELLED"  # Trip cancelled by admin or client
 
 # Keep DutyStatus as alias for backward compatibility
 DutyStatus = TripStatus
