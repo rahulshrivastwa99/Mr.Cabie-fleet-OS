@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Truck, UserCircle, Notebook, Receipt } from '@phosphor-icons/react';
+import { Truck, UserCircle, Notebook, Receipt, Trash, Warning } from '@phosphor-icons/react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
 
   useEffect(() => {
     fetchStats();
@@ -21,6 +25,26 @@ const Dashboard = () => {
       toast.error('Failed to load dashboard stats');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClearAllData = async () => {
+    if (confirmText !== 'DELETE ALL') {
+      toast.error('Please type DELETE ALL to confirm');
+      return;
+    }
+    
+    setClearing(true);
+    try {
+      const response = await axios.post(`${API_BASE}/admin/clear-all-data`);
+      toast.success(`All data cleared! ${response.data.total_records_deleted} records deleted.`);
+      setShowClearModal(false);
+      setConfirmText('');
+      fetchStats(); // Refresh stats
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to clear data');
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -139,9 +163,76 @@ const Dashboard = () => {
             >
               Generate Invoice
             </button>
+            <button
+              onClick={() => setShowClearModal(true)}
+              className="w-full px-4 py-3 text-left text-sm font-medium border border-red-200 text-red-600 hover:bg-red-50 transition-colors duration-150 flex items-center gap-2"
+              data-testid="clear-all-data-btn"
+            >
+              <Trash size={18} />
+              Clear All Data
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Clear All Data Confirmation Modal */}
+      <Dialog open={showClearModal} onOpenChange={setShowClearModal}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold tracking-tight text-red-600 flex items-center gap-2">
+              <Warning size={24} />
+              Clear All Data
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-4 space-y-4">
+            <div className="p-4 bg-red-50 border border-red-200 rounded">
+              <p className="text-sm text-red-700 font-semibold mb-2">WARNING: This action cannot be undone!</p>
+              <p className="text-sm text-red-600">This will permanently delete:</p>
+              <ul className="text-sm text-red-600 list-disc list-inside mt-2">
+                <li>All Trips & Bookings</li>
+                <li>All Duty Slips</li>
+                <li>All Invoices</li>
+                <li>All Clients & Corporate Users</li>
+                <li>All Drivers</li>
+                <li>All Vehicles</li>
+                <li>All Contracts</li>
+              </ul>
+            </div>
+            <div>
+              <label className="text-sm text-[#525252] mb-2 block">
+                Type <strong>DELETE ALL</strong> to confirm:
+              </label>
+              <input
+                type="text"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="DELETE ALL"
+                className="w-full px-4 py-2 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-red-500 text-sm font-mono"
+                data-testid="confirm-delete-input"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowClearModal(false);
+                  setConfirmText('');
+                }}
+                className="flex-1 px-4 py-2 border border-[#E5E5E5] text-sm font-medium hover:bg-[#F5F5F5] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearAllData}
+                disabled={clearing || confirmText !== 'DELETE ALL'}
+                className="flex-1 px-4 py-2 bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="confirm-clear-btn"
+              >
+                {clearing ? 'Clearing...' : 'Clear All Data'}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

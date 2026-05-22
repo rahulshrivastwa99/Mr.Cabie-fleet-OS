@@ -2605,6 +2605,49 @@ async def admin_delete_corporate_user(user_id: str, current_user: User = Depends
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "Corporate user deleted"}
 
+@api_router.post("/admin/clear-all-data")
+async def admin_clear_all_data(current_user: User = Depends(get_current_user)):
+    """
+    Admin endpoint to clear ALL data and start fresh.
+    DANGER: This permanently deletes all trips, invoices, clients, drivers, vehicles, etc.
+    Only keeps the admin user account.
+    """
+    collections_to_clear = [
+        "duties",          # Trips
+        "duty_slips",      # Duty Slips
+        "invoices",        # Invoices
+        "clients",         # Corporate Clients
+        "drivers",         # Drivers
+        "vehicles",        # Fleet/Vehicles
+        "contracts",       # Contracts
+        "corporate_users", # Corporate Portal Users
+        "employees",       # Employees under clients
+        "bookings",        # Bookings
+    ]
+    
+    results = {}
+    for collection in collections_to_clear:
+        try:
+            count_before = await db[collection].count_documents({})
+            await db[collection].delete_many({})
+            results[collection] = count_before
+        except Exception as e:
+            results[collection] = f"Error: {str(e)}"
+    
+    # Keep admin user but clear any other users
+    deleted_users = await db.users.delete_many({"email": {"$ne": "admin@fleetOS.com"}})
+    results["other_users"] = deleted_users.deleted_count
+    
+    total_deleted = sum(v for v in results.values() if isinstance(v, int))
+    
+    logger.info(f"Admin {current_user.email} cleared all data: {results}")
+    
+    return {
+        "message": "All data cleared successfully",
+        "deleted_counts": results,
+        "total_records_deleted": total_deleted
+    }
+
 # Corporate Dashboard
 @api_router.get("/corporate/dashboard/stats", response_model=CorporateDashboardStats)
 async def get_corporate_dashboard_stats(current_user: CorporateUser = Depends(get_current_corporate_user)):
