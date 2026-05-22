@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { corporateAxios } from '../../context/CorporateAuthContext';
 import { toast } from 'sonner';
 import { Calendar, Users, MapPin, CurrencyDollar, TrendUp, Clock } from '@phosphor-icons/react';
 import { useCorporateAuth } from '../../context/CorporateAuthContext';
@@ -17,7 +17,7 @@ const CorporateDashboard = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/dashboard/stats`);
+      const response = await corporateAxios.get(`${API_BASE}/dashboard/stats`);
       setStats(response.data);
     } catch (error) {
       toast.error('Failed to load dashboard stats');

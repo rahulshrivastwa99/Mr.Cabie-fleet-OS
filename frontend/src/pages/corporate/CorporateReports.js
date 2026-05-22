@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { corporateAxios } from '../../context/CorporateAuthContext';
 import { toast } from 'sonner';
 import { ChartBar, Download, FileText } from '@phosphor-icons/react';
 
@@ -23,7 +23,7 @@ const CorporateReports = () => {
       if (dateRange.start_date) params.start_date = dateRange.start_date;
       if (dateRange.end_date) params.end_date = dateRange.end_date;
       
-      const response = await axios.get(`${API_BASE}/reports/trips`, { params });
+      const response = await corporateAxios.get(`${API_BASE}/reports/trips`, { params });
       setReport(response.data);
     } catch (error) {
       toast.error('Failed to load report');

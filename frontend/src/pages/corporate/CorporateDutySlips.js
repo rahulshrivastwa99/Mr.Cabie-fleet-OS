@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { corporateAxios } from '../../context/CorporateAuthContext';
 import { toast } from 'sonner';
 import { FileText, Download, Calendar, ChartLineUp } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -41,7 +41,7 @@ const CorporateDutySlips = () => {
       if (filters.date_from) params.append('date_from', filters.date_from);
       if (filters.date_to) params.append('date_to', filters.date_to);
 
-      const response = await axios.get(`${API_BASE}/duty-slips?${params.toString()}`);
+      const response = await corporateAxios.get(`${API_BASE}/duty-slips?${params.toString()}`);
       setDutySlips(response.data);
     } catch (error) {
       toast.error('Failed to load duty slips');
@@ -51,7 +51,7 @@ const CorporateDutySlips = () => {
   const fetchMonthlySummary = async () => {
     try {
       const now = new Date();
-      const response = await axios.get(`${API_BASE}/monthly-summary?year=${now.getFullYear()}&month=${now.getMonth() + 1}`);
+      const response = await corporateAxios.get(`${API_BASE}/monthly-summary?year=${now.getFullYear()}&month=${now.getMonth() + 1}`);
       setMonthlySummary(response.data);
     } catch (error) {
       console.error('Failed to fetch monthly summary');
@@ -60,7 +60,7 @@ const CorporateDutySlips = () => {
 
   const fetchContract = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/contract`);
+      const response = await corporateAxios.get(`${API_BASE}/contract`);
       setContract(response.data.contract);
     } catch (error) {
       console.error('Failed to fetch contract');

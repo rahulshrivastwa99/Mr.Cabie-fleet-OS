@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { corporateAxios } from '../../context/CorporateAuthContext';
 import { toast } from 'sonner';
 import { MapPin, Truck, Phone, NavigationArrow, Clock } from '@phosphor-icons/react';
 
@@ -18,7 +18,7 @@ const CorporateTracking = () => {
 
   const fetchActiveTrips = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/tracking/active`);
+      const response = await corporateAxios.get(`${API_BASE}/tracking/active`);
       setTrackingData(response.data);
       setLastUpdated(new Date());
     } catch (error) {

@@ -5,6 +5,9 @@ const CorporateAuthContext = createContext(null);
 
 const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api/corporate`;
 
+// Create a separate axios instance for corporate requests
+const corporateAxios = axios.create();
+
 export const CorporateAuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('corporate_token'));
@@ -12,7 +15,7 @@ export const CorporateAuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      corporateAxios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       fetchUser();
     } else {
       setLoading(false);
@@ -21,7 +24,7 @@ export const CorporateAuthProvider = ({ children }) => {
 
   const fetchUser = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/auth/me`);
+      const response = await corporateAxios.get(`${API_BASE}/auth/me`);
       setUser(response.data);
     } catch (error) {
       console.error('Error fetching corporate user:', error);
@@ -37,7 +40,7 @@ export const CorporateAuthProvider = ({ children }) => {
     localStorage.setItem('corporate_token', access_token);
     setToken(access_token);
     setUser(userData);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+    corporateAxios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
     return userData;
   };
 
@@ -56,11 +59,14 @@ export const CorporateAuthProvider = ({ children }) => {
     localStorage.removeItem('corporate_token');
     setToken(null);
     setUser(null);
-    delete axios.defaults.headers.common['Authorization'];
+    delete corporateAxios.defaults.headers.common['Authorization'];
   };
 
+  // Provide the corporate axios instance for use in corporate pages
+  const getAxios = () => corporateAxios;
+
   return (
-    <CorporateAuthContext.Provider value={{ user, token, login, register, logout, loading }}>
+    <CorporateAuthContext.Provider value={{ user, token, login, register, logout, loading, getAxios }}>
       {children}
     </CorporateAuthContext.Provider>
   );
@@ -73,3 +79,6 @@ export const useCorporateAuth = () => {
   }
   return context;
 };
+
+// Export the corporate axios for direct use in components
+export { corporateAxios };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { corporateAxios } from '../../context/CorporateAuthContext';
 import { toast } from 'sonner';
 import { Receipt, Download, FileText } from '@phosphor-icons/react';
 
@@ -15,7 +15,7 @@ const CorporateInvoices = () => {
 
   const fetchInvoices = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/invoices`);
+      const response = await corporateAxios.get(`${API_BASE}/invoices`);
       setInvoices(response.data);
     } catch (error) {
       toast.error('Failed to load invoices');

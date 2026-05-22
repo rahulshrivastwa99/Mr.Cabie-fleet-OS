@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { corporateAxios } from '../../context/CorporateAuthContext';
 import { toast } from 'sonner';
 import { Plus, Calendar, Upload, ArrowsLeftRight, CaretDown, Users, X } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -77,8 +77,8 @@ const CorporateBookings = () => {
   const fetchData = async () => {
     try {
       const [bookingsRes, employeesRes] = await Promise.all([
-        axios.get(`${API_BASE}/bookings`),
-        user.role !== 'FINANCE' ? axios.get(`${API_BASE}/employees`) : Promise.resolve({ data: [] })
+        corporateAxios.get(`${API_BASE}/bookings`),
+        user.role !== 'FINANCE' ? corporateAxios.get(`${API_BASE}/employees`) : Promise.resolve({ data: [] })
       ]);
       setBookings(bookingsRes.data);
       setEmployees(employeesRes.data);
@@ -146,7 +146,7 @@ const CorporateBookings = () => {
         payload.service_type = formData.service_type;
       }
 
-      await axios.post(`${API_BASE}/bookings`, payload);
+      await corporateAxios.post(`${API_BASE}/bookings`, payload);
       toast.success('Booking created successfully');
       setShowModal(false);
       resetForm();
@@ -193,7 +193,7 @@ const CorporateBookings = () => {
         };
       });
 
-      const response = await axios.post(`${API_BASE}/bookings/bulk-create`, bookingsData);
+      const response = await corporateAxios.post(`${API_BASE}/bookings/bulk-create`, bookingsData);
       
       if (response.data.created > 0) {
         toast.success(`${response.data.created} bookings created successfully`);
@@ -238,7 +238,7 @@ const CorporateBookings = () => {
       return;
     }
     try {
-      await axios.patch(`${API_BASE}/bookings/${bookingId}/cancel`);
+      await corporateAxios.patch(`${API_BASE}/bookings/${bookingId}/cancel`);
       toast.success('Booking cancelled successfully');
       fetchData();
     } catch (error) {

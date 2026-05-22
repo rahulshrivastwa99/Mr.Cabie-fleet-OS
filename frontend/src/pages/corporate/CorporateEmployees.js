@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { toast } from 'sonner';
 import { Plus, Users, Upload } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useCorporateAuth } from '../../context/CorporateAuthContext';
+import { useCorporateAuth, corporateAxios } from '../../context/CorporateAuthContext';
 import CSVUploader from '../../components/CSVUploader';
 
 const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api/corporate`;
@@ -31,7 +30,7 @@ const CorporateEmployees = () => {
 
   const fetchEmployees = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/employees`);
+      const response = await corporateAxios.get(`${API_BASE}/employees`);
       setEmployees(response.data);
     } catch (error) {
       toast.error('Failed to load employees');
@@ -43,7 +42,7 @@ const CorporateEmployees = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API_BASE}/employees`, formData);
+      await corporateAxios.post(`${API_BASE}/employees`, formData);
       toast.success('Employee added successfully');
       setShowModal(false);
       setFormData({
@@ -75,7 +74,7 @@ const CorporateEmployees = () => {
         default_dropoff: row.default_dropoff || undefined
       }));
 
-      const response = await axios.post(`${API_BASE}/employees/bulk-create`, employeesData);
+      const response = await corporateAxios.post(`${API_BASE}/employees/bulk-create`, employeesData);
       
       if (response.data.created > 0) {
         toast.success(`${response.data.created} employees added successfully`);
