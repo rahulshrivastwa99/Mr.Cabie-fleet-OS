@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { MapPin, CaretDown, Phone, Navigation } from '@phosphor-icons/react';
+import { MapPin, CaretDown, Phone, Navigation, User, Car } from '@phosphor-icons/react';
+import { APIProvider, Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
 
 const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
 const LiveTracking = () => {
   const [driverLocations, setDriverLocations] = useState([]);
@@ -11,6 +13,7 @@ const LiveTracking = () => {
   const [loading, setLoading] = useState(true);
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [mapCenter, setMapCenter] = useState({ lat: 28.6139, lng: 77.2090 }); // Default: Delhi
 
   useEffect(() => {
     fetchData();
@@ -30,6 +33,15 @@ const LiveTracking = () => {
       );
       setDuties(activeDuties);
       setLastUpdated(new Date());
+      
+      // Center map on first driver with location
+      const firstWithLocation = locationsRes.data.find(d => d.location?.lat && d.location?.lng);
+      if (firstWithLocation) {
+        setMapCenter({
+          lat: firstWithLocation.location.lat,
+          lng: firstWithLocation.location.lng
+        });
+      }
     } catch (error) {
       toast.error('Failed to load tracking data');
     } finally {
@@ -38,47 +50,35 @@ const LiveTracking = () => {
   };
 
   const getStatusColor = (status) => {
-    switch(status) {
-      case 'ON_DUTY': return 'bg-blue-500';
-      case 'AVAILABLE': return 'bg-green-500';
-      default: return 'bg-gray-400';
-    }
+    const colors = {
+      'AVAILABLE': 'bg-green-500',
+      'ON_DUTY': 'bg-blue-500',
+      'ON_LEAVE': 'bg-yellow-500',
+      'INACTIVE': 'bg-gray-500'
+    };
+    return colors[status] || 'bg-gray-500';
   };
 
-  const getStatusBadgeClass = (status) => {
-    switch(status) {
-      case 'ON_DUTY': return 'bg-blue-100 text-blue-700';
-      case 'AVAILABLE': return 'bg-green-100 text-green-700';
-      default: return 'bg-gray-100 text-gray-700';
-    }
+  const getDriverDuty = (driverId) => {
+    return duties.find(d => d.driver_id === driverId);
   };
 
-  const formatLastSeen = (timestamp) => {
-    if (!timestamp) return 'Never';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = Math.floor((now - date) / 1000);
-    
-    if (diff < 60) return 'Just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
-    return date.toLocaleDateString();
+  const formatTimeAgo = (timestamp) => {
+    if (!timestamp) return 'Unknown';
+    const diff = Date.now() - new Date(timestamp).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
   };
-
-  if (loading) {
-    return (
-      <div className="p-6 flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-[#0047FF] border-t-transparent rounded-sm animate-spin mx-auto mb-4"></div>
-          <p className="text-sm text-[#525252]">Loading tracking data...</p>
-        </div>
-      </div>
-    );
-  }
 
   const driversOnDuty = driverLocations.filter(d => d.status === 'ON_DUTY');
   const driversAvailable = driverLocations.filter(d => d.status === 'AVAILABLE');
-  const driversWithLocation = driverLocations.filter(d => d.location);
+  const driversWithLocation = driverLocations.filter(d => d.location?.lat && d.location?.lng);
+
+  const hasValidApiKey = GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== 'YOUR_GOOGLE_MAPS_API_KEY';
 
   return (
     <div className="h-full flex flex-col" data-testid="tracking-page">
@@ -108,125 +108,174 @@ const LiveTracking = () => {
       </div>
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3">
-        {/* Map Placeholder */}
-        <div className="lg:col-span-2 relative bg-[#F5F5F5]">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center p-8 bg-white border border-[#E5E5E5] max-w-md">
-              <MapPin size={48} className="mx-auto mb-4 text-[#0047FF]" />
-              <h3 className="text-lg font-semibold mb-2">Google Maps Integration</h3>
-              <p className="text-sm text-[#525252] mb-4">
-                Add your Google Maps API key to enable live map view with driver markers.
-              </p>
-              <div className="p-3 bg-[#FAFAFA] border border-[#E5E5E5] text-left">
-                <p className="text-xs font-mono text-[#525252]">
-                  REACT_APP_GOOGLE_MAPS_API_KEY=your_key_here
+        {/* Map Section */}
+        <div className="lg:col-span-2 relative bg-[#F5F5F5]" style={{ minHeight: '500px' }}>
+          {hasValidApiKey ? (
+            <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>
+              <Map
+                defaultCenter={mapCenter}
+                defaultZoom={12}
+                mapId="fleet-os-tracking-map"
+                style={{ width: '100%', height: '100%' }}
+                gestureHandling="greedy"
+                disableDefaultUI={false}
+              >
+                {driversWithLocation.map((driver) => (
+                  <AdvancedMarker
+                    key={driver.id}
+                    position={{ lat: driver.location.lat, lng: driver.location.lng }}
+                    onClick={() => setSelectedDriver(driver)}
+                  >
+                    <div 
+                      className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg border-2 border-white ${
+                        driver.status === 'ON_DUTY' ? 'bg-blue-500' : 
+                        driver.status === 'AVAILABLE' ? 'bg-green-500' : 'bg-gray-500'
+                      }`}
+                      title={driver.name}
+                    >
+                      <Car size={20} weight="fill" />
+                    </div>
+                  </AdvancedMarker>
+                ))}
+              </Map>
+            </APIProvider>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center p-8 bg-white border border-[#E5E5E5] max-w-md">
+                <MapPin size={48} className="mx-auto mb-4 text-[#0047FF]" />
+                <h3 className="text-lg font-semibold mb-2">Google Maps Integration</h3>
+                <p className="text-sm text-[#525252] mb-4">
+                  Add your Google Maps API key to enable live map view with driver markers.
+                </p>
+                <div className="p-3 bg-[#FAFAFA] border border-[#E5E5E5] text-left">
+                  <p className="text-xs font-mono text-[#525252]">
+                    REACT_APP_GOOGLE_MAPS_API_KEY=your_key_here
+                  </p>
+                </div>
+                <p className="text-xs text-[#525252] mt-4">
+                  Get your API key from <a href="https://console.cloud.google.com/google/maps-apis" target="_blank" rel="noreferrer" className="text-[#0047FF] hover:underline">Google Cloud Console</a>
                 </p>
               </div>
-              <p className="text-xs text-[#525252] mt-4">
-                Get your API key from <a href="https://console.cloud.google.com/google/maps-apis" target="_blank" rel="noreferrer" className="text-[#0047FF] hover:underline">Google Cloud Console</a>
-              </p>
             </div>
-          </div>
+          )}
 
-          {/* Driver Location List (visible when no map) */}
-          <div className="absolute bottom-4 left-4 right-4 max-h-48 overflow-auto">
-            <div className="bg-white border border-[#E5E5E5] p-4">
-              <p className="text-xs font-semibold uppercase tracking-widest text-[#525252] mb-3">
-                Driver Coordinates (Last Known)
-              </p>
-              <div className="space-y-2">
-                {driversWithLocation.length === 0 ? (
-                  <p className="text-sm text-[#525252]">No driver locations available</p>
-                ) : (
-                  driversWithLocation.map(driver => (
-                    <div key={driver.driver_id} className="flex justify-between items-center text-xs">
-                      <span className="font-medium">{driver.name}</span>
-                      <span className="text-[#525252] font-mono">
-                        {driver.location?.latitude?.toFixed(4)}, {driver.location?.longitude?.toFixed(4)}
-                      </span>
-                      <span className="text-[#525252]">{formatLastSeen(driver.location?.updated_at)}</span>
-                    </div>
-                  ))
+          {/* Selected Driver Info Popup */}
+          {selectedDriver && (
+            <div className="absolute top-4 left-4 bg-white border border-[#E5E5E5] p-4 shadow-lg max-w-xs z-10">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${getStatusColor(selectedDriver.status)}`}>
+                    <User size={20} weight="fill" />
+                  </div>
+                  <div>
+                    <p className="font-semibold">{selectedDriver.name}</p>
+                    <p className="text-xs text-[#525252]">{selectedDriver.phone}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedDriver(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-[#525252]">Status:</span>
+                  <span className={`px-2 py-0.5 text-xs font-semibold text-white rounded ${getStatusColor(selectedDriver.status)}`}>
+                    {selectedDriver.status}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#525252]">Last Update:</span>
+                  <span>{formatTimeAgo(selectedDriver.location?.updated_at)}</span>
+                </div>
+                {getDriverDuty(selectedDriver.id) && (
+                  <div className="pt-2 border-t border-[#E5E5E5]">
+                    <p className="text-xs font-semibold text-[#525252] mb-1">Current Trip:</p>
+                    <p className="text-xs">{getDriverDuty(selectedDriver.id)?.pickup_location}</p>
+                    <p className="text-xs">→ {getDriverDuty(selectedDriver.id)?.drop_location}</p>
+                  </div>
                 )}
               </div>
+              <a 
+                href={`tel:${selectedDriver.phone}`}
+                className="mt-3 w-full flex items-center justify-center gap-2 py-2 bg-green-500 text-white text-sm font-semibold hover:bg-green-600"
+              >
+                <Phone size={16} /> Call Driver
+              </a>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Sidebar - Driver List */}
-        <div className="bg-white border-l border-[#E5E5E5] overflow-auto">
-          <div className="p-4 border-b border-[#E5E5E5] sticky top-0 bg-white z-10">
-            <h2 className="text-lg font-semibold tracking-tight">Active Drivers</h2>
-            <p className="text-xs text-[#525252]">{driverLocations.length} total</p>
+        {/* Driver List Sidebar */}
+        <div className="border-l border-[#E5E5E5] overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-[#E5E5E5] bg-white">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-[#525252]">
+              Active Drivers ({driverLocations.length})
+            </h2>
           </div>
-          
-          <div className="divide-y divide-[#E5E5E5]">
-            {driverLocations.length === 0 ? (
-              <div className="p-8 text-center">
-                <p className="text-sm text-[#525252]">No drivers available</p>
-              </div>
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="p-4 text-center text-[#525252]">Loading...</div>
+            ) : driverLocations.length === 0 ? (
+              <div className="p-4 text-center text-[#525252]">No active drivers</div>
             ) : (
-              driverLocations.map(driver => {
-                const activeTrip = duties.find(d => d.driver_id === driver.driver_id && d.status === 'STARTED');
-                return (
-                  <div 
-                    key={driver.driver_id} 
-                    className={`p-4 cursor-pointer hover:bg-[#FAFAFA] transition-colors ${
-                      selectedDriver?.driver_id === driver.driver_id ? 'bg-blue-50' : ''
-                    }`}
-                    onClick={() => setSelectedDriver(driver)}
-                    data-testid={`driver-location-${driver.driver_id}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {/* Status Indicator */}
-                      <div className={`w-3 h-3 rounded-full mt-1.5 ${getStatusColor(driver.status)}`} />
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="text-sm font-semibold truncate">{driver.name}</p>
-                            <p className="text-xs text-[#525252]">{driver.phone}</p>
-                          </div>
-                          <span className={`text-xs px-2 py-0.5 font-medium ${getStatusBadgeClass(driver.status)}`}>
-                            {driver.status}
-                          </span>
+              <div className="divide-y divide-[#E5E5E5]">
+                {driverLocations.map((driver) => {
+                  const duty = getDriverDuty(driver.id);
+                  return (
+                    <div 
+                      key={driver.id} 
+                      className={`p-4 hover:bg-[#FAFAFA] cursor-pointer transition-colors ${
+                        selectedDriver?.id === driver.id ? 'bg-blue-50' : ''
+                      }`}
+                      onClick={() => {
+                        setSelectedDriver(driver);
+                        if (driver.location?.lat && driver.location?.lng) {
+                          setMapCenter({ lat: driver.location.lat, lng: driver.location.lng });
+                        }
+                      }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0 ${getStatusColor(driver.status)}`}>
+                          <User size={20} weight="fill" />
                         </div>
-
-                        {/* Location Info */}
-                        <div className="mt-2 flex items-center gap-2 text-xs text-[#525252]">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-semibold truncate">{driver.name}</p>
+                              <p className="text-xs text-[#525252]">{driver.phone}</p>
+                            </div>
+                            <span className={`px-2 py-0.5 text-xs font-semibold text-white rounded ${getStatusColor(driver.status)}`}>
+                              {driver.status}
+                            </span>
+                          </div>
+                          
                           {driver.location ? (
-                            <>
-                              <MapPin size={12} className="text-green-500" />
-                              <span>GPS: {formatLastSeen(driver.location.updated_at)}</span>
-                            </>
+                            <div className="mt-2 text-xs text-[#525252]">
+                              <div className="flex items-center gap-1">
+                                <MapPin size={12} />
+                                <span>{driver.location.lat?.toFixed(4)}, {driver.location.lng?.toFixed(4)}</span>
+                              </div>
+                              <p className="mt-1">Updated: {formatTimeAgo(driver.location.updated_at)}</p>
+                            </div>
                           ) : (
-                            <>
-                              <MapPin size={12} className="text-gray-400" />
-                              <span>No GPS data</span>
-                            </>
+                            <p className="mt-2 text-xs text-[#525252]">No GPS data</p>
+                          )}
+                          
+                          {duty && (
+                            <div className="mt-2 p-2 bg-blue-50 border border-blue-100 text-xs">
+                              <p className="font-semibold text-blue-700">{duty.status}</p>
+                              <p className="truncate">{duty.pickup_location} → {duty.drop_location}</p>
+                            </div>
                           )}
                         </div>
-
-                        {/* Active Trip Info */}
-                        {activeTrip && (
-                          <div className="mt-2 p-2 bg-green-50 border border-green-200">
-                            <p className="text-xs font-semibold text-green-700">Active Trip</p>
-                            <p className="text-xs text-green-600 truncate">
-                              {activeTrip.passenger_name} • {activeTrip.dropoff_location}
-                            </p>
-                          </div>
-                        )}
-
-                        {driver.location?.trip_id && !activeTrip && (
-                          <div className="mt-2 p-2 bg-blue-50 border border-blue-200">
-                            <p className="text-xs text-blue-700">On active trip</p>
-                          </div>
-                        )}
                       </div>
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
