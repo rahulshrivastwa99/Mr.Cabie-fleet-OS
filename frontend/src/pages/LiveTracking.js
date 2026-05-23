@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { MapPin, Phone, User, Car, Circle } from '@phosphor-icons/react';
-import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, Marker, InfoWindow } from '@vis.gl/react-google-maps';
 
 const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
@@ -28,7 +28,22 @@ const LiveTracking = () => {
         axios.get(`${API_BASE}/admin/drivers/locations`),
         axios.get(`${API_BASE}/duties`)
       ]);
-      setDriverLocations(locationsRes.data);
+      
+      // Transform backend data to match frontend expected format
+      // Backend sends: driver_id, latitude, longitude
+      // Frontend expects: id, lat, lng
+      const transformedDrivers = locationsRes.data.map(driver => ({
+        ...driver,
+        id: driver.driver_id || driver.id,
+        location: driver.location ? {
+          lat: driver.location.latitude,
+          lng: driver.location.longitude,
+          updated_at: driver.location.updated_at,
+          trip_id: driver.location.trip_id
+        } : null
+      }));
+      
+      setDriverLocations(transformedDrivers);
       const activeDuties = dutiesRes.data.filter(d => 
         ['ASSIGNED', 'ACCEPTED', 'STARTED'].includes(d.status)
       );
@@ -36,7 +51,7 @@ const LiveTracking = () => {
       setLastUpdated(new Date());
       
       // Center map on first driver with location
-      const driversWithLoc = locationsRes.data.filter(d => d.location?.lat && d.location?.lng);
+      const driversWithLoc = transformedDrivers.filter(d => d.location?.lat && d.location?.lng);
       if (driversWithLoc.length > 0 && !selectedDriver) {
         // Calculate center of all drivers
         const avgLat = driversWithLoc.reduce((sum, d) => sum + d.location.lat, 0) / driversWithLoc.length;
@@ -86,64 +101,36 @@ const LiveTracking = () => {
 
   const hasValidApiKey = GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== 'YOUR_GOOGLE_MAPS_API_KEY';
 
-  // Custom Driver Marker Component
-  const DriverMarker = ({ driver, isSelected, onClick }) => {
+  // Generate SVG icon data URI for markers
+  const getMarkerIcon = (driver) => {
     const duty = getDriverDuty(driver.id);
     const isOnTrip = duty && duty.status === 'STARTED';
     const statusColor = getStatusColor(driver.status);
+    const color = isOnTrip ? '#EF4444' : statusColor.bg;
     
-    return (
-      <div 
-        onClick={onClick}
-        className={`relative cursor-pointer transform transition-transform hover:scale-110 ${isSelected ? 'scale-125 z-50' : ''}`}
-      >
-        {/* Pulse animation for drivers on active trip */}
-        {isOnTrip && (
-          <div className="absolute inset-0 -m-2">
-            <div className="w-14 h-14 rounded-full bg-blue-500 animate-ping opacity-30"></div>
-          </div>
-        )}
-        
-        {/* Main marker */}
-        <div 
-          className={`relative flex flex-col items-center`}
-          style={{ filter: isSelected ? 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}
-        >
-          {/* Pin shape */}
-          <div 
-            className="w-10 h-10 rounded-full flex items-center justify-center border-3 border-white"
-            style={{ 
-              backgroundColor: isOnTrip ? '#EF4444' : statusColor.bg,
-              borderWidth: '3px'
-            }}
-          >
-            <Car size={20} weight="fill" className="text-white" />
-          </div>
-          {/* Pin pointer */}
-          <div 
-            className="w-0 h-0 -mt-1"
-            style={{
-              borderLeft: '8px solid transparent',
-              borderRight: '8px solid transparent',
-              borderTop: `10px solid ${isOnTrip ? '#EF4444' : statusColor.bg}`
-            }}
-          ></div>
-          
-          {/* Driver name label */}
-          <div className="absolute -bottom-6 whitespace-nowrap">
-            <span 
-              className="px-2 py-0.5 text-xs font-semibold rounded shadow-sm"
-              style={{ 
-                backgroundColor: isOnTrip ? '#EF4444' : statusColor.bg,
-                color: 'white'
-              }}
-            >
-              {driver.name?.split(' ')[0] || 'Driver'}
-            </span>
-          </div>
-        </div>
-      </div>
-    );
+    // SVG car marker icon
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48">
+        <defs>
+          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.3"/>
+          </filter>
+        </defs>
+        <g filter="url(#shadow)">
+          <circle cx="20" cy="18" r="16" fill="${color}" stroke="white" stroke-width="3"/>
+          <path d="M20 38 L12 24 L28 24 Z" fill="${color}"/>
+          <g transform="translate(10, 8)">
+            <path fill="white" d="M18 7H17V6C17 3.24 14.76 1 12 1S7 3.24 7 6V7H6C4.9 7 4 7.9 4 9V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V9C20 7.9 19.1 7 18 7ZM9 6C9 4.34 10.34 3 12 3S15 4.34 15 6V7H9V6Z" transform="scale(0.7) translate(2, 2)"/>
+            <circle cx="10" cy="10" r="5" fill="white"/>
+            <path fill="${color}" d="M7 8h6v4H7z"/>
+            <circle cx="8" cy="14" r="2" fill="white"/>
+            <circle cx="12" cy="14" r="2" fill="white"/>
+          </g>
+        </g>
+      </svg>
+    `;
+    
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
   };
 
   return (
@@ -208,23 +195,22 @@ const LiveTracking = () => {
                 zoom={mapZoom}
                 onCenterChanged={(e) => setMapCenter(e.detail.center)}
                 onZoomChanged={(e) => setMapZoom(e.detail.zoom)}
-                mapId="fleet-os-tracking-map"
                 style={{ width: '100%', height: '100%' }}
                 gestureHandling="greedy"
                 disableDefaultUI={false}
               >
                 {driversWithLocation.map((driver) => (
-                  <AdvancedMarker
+                  <Marker
                     key={driver.id}
                     position={{ lat: driver.location.lat, lng: driver.location.lng }}
                     onClick={() => setSelectedDriver(driver)}
-                  >
-                    <DriverMarker 
-                      driver={driver} 
-                      isSelected={selectedDriver?.id === driver.id}
-                      onClick={() => setSelectedDriver(driver)}
-                    />
-                  </AdvancedMarker>
+                    icon={{
+                      url: getMarkerIcon(driver),
+                      scaledSize: { width: 40, height: 48 },
+                      anchor: { x: 20, y: 48 }
+                    }}
+                    title={driver.name}
+                  />
                 ))}
               </Map>
             </APIProvider>
@@ -385,7 +371,7 @@ const LiveTracking = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-center">
                             <p className="font-semibold truncate text-sm">{driver.name}</p>
-                            {driver.location ? (
+                            {driver.location?.lat && driver.location?.lng ? (
                               <span className="text-xs text-green-600 font-medium">GPS ✓</span>
                             ) : (
                               <span className="text-xs text-gray-400">No GPS</span>
