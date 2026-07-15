@@ -82,10 +82,15 @@ const CorporateLayout = () => {
 
   return (
     <div className="flex h-screen bg-[#FAFAFA]">
-      <aside className="w-64 bg-white border-r border-[#E5E5E5] flex flex-col">
-        <div className="p-6 border-b border-[#E5E5E5]">
-          <h1 className="text-xl font-bold tracking-tight" data-testid="corporate-app-title">Mr. Cabie</h1>
-          <p className="text-xs text-[#525252] mt-1 uppercase tracking-widest">Corporate Portal</p>
+      <aside className="w-64 bg-[#0A0A0A] border-r border-[#1A1A1A] flex flex-col">
+        <div className="p-4 border-b border-[#1A1A1A]">
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="Mr. Cabie" className="h-10 w-auto" />
+            <div>
+              <h1 className="text-lg font-bold tracking-tight text-[#FFD700]" data-testid="corporate-app-title">Mr. Cabie</h1>
+              <p className="text-xs text-gray-500 uppercase tracking-widest">Corporate Portal</p>
+            </div>
+          </div>
         </div>
         
         <nav className="flex-1 p-4" data-testid="corporate-sidebar-nav">
@@ -95,10 +100,10 @@ const CorporateLayout = () => {
               to={item.path}
               end={item.exact}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 mb-1 text-sm transition-colors duration-150 ${
+                `flex items-center gap-3 px-4 py-3 mb-1 text-sm transition-colors duration-150 rounded-lg ${
                   isActive
-                    ? 'bg-[#E6EFFF] text-[#0047FF] border-l-2 border-[#0047FF]'
-                    : 'text-[#525252] hover:bg-[#F5F5F5]'
+                    ? 'bg-[#FFD700]/10 text-[#FFD700] border-l-2 border-[#FFD700]'
+                    : 'text-gray-400 hover:bg-[#1A1A1A] hover:text-white'
                 }`
               }
               data-testid={`corporate-nav-${item.label.toLowerCase()}`}
@@ -109,18 +114,18 @@ const CorporateLayout = () => {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-[#E5E5E5]">
+        <div className="p-4 border-t border-[#1A1A1A]">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-sm bg-[#E5E5E5] flex items-center justify-center">
-              <UserCircle size={24} weight="regular" />
+            <div className="w-10 h-10 rounded-lg bg-[#1A1A1A] flex items-center justify-center">
+              <UserCircle size={24} weight="regular" className="text-[#FFD700]" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold">{user?.display_name || user?.name}</p>
-              <p className="text-xs text-[#525252] uppercase tracking-wider">{user?.role}</p>
+              <p className="text-sm font-semibold text-white">{user?.display_name || user?.name}</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wider">{user?.role}</p>
             </div>
             <button
               onClick={() => setShowPasswordModal(true)}
-              className="p-2 text-[#525252] hover:text-[#0047FF] hover:bg-[#F5F5F5] transition-colors"
+              className="p-2 text-gray-400 hover:text-[#FFD700] hover:bg-[#1A1A1A] rounded-lg transition-colors"
               title="Settings"
               data-testid="corporate-settings-button"
             >
@@ -129,7 +134,7 @@ const CorporateLayout = () => {
           </div>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm border border-[#E5E5E5] hover:bg-[#F5F5F5] transition-colors duration-150"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm border border-[#333] text-gray-400 hover:bg-[#1A1A1A] hover:text-white rounded-lg transition-colors duration-150"
             data-testid="corporate-logout-button"
           >
             <SignOut size={18} weight="regular" />

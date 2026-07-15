@@ -76,11 +76,9 @@ const DriverLogin = () => {
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col" data-testid="driver-login-page">
       {/* Header */}
       <div className="bg-[#1A1A1A] px-4 py-4 flex items-center gap-3">
-        <div className="w-10 h-10 bg-[#FF9800] rounded-lg flex items-center justify-center">
-          <Truck size={24} className="text-white" />
-        </div>
+        <img src="/logo.png" alt="Mr. Cabie" className="h-10 w-auto" />
         <div>
-          <h1 className="text-white font-bold text-lg">Fleet OS</h1>
+          <h1 className="text-[#FFD700] font-bold text-lg">Mr. Cabie</h1>
           <p className="text-gray-400 text-xs">Driver Portal</p>
         </div>
       </div>
@@ -89,11 +87,11 @@ const DriverLogin = () => {
       <div className="flex-1 flex flex-col justify-center px-6 py-8">
         <div className="max-w-md mx-auto w-full">
           {/* Icon */}
-          <div className="w-20 h-20 bg-[#FF9800] rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="w-20 h-20 bg-[#FFD700] rounded-full flex items-center justify-center mx-auto mb-6">
             {step === 'phone' ? (
-              <Phone size={36} className="text-white" />
+              <Phone size={36} className="text-black" />
             ) : (
-              <Shield size={36} className="text-white" />
+              <Shield size={36} className="text-black" />
             )}
           </div>
 
@@ -120,7 +118,7 @@ const DriverLogin = () => {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     placeholder="Enter 10-digit number"
-                    className="w-full bg-[#1A1A1A] border border-[#333] text-white pl-14 pr-4 py-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF9800] text-lg"
+                    className="w-full bg-[#1A1A1A] border border-[#333] text-white pl-14 pr-4 py-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFD700] text-lg"
                     maxLength={10}
                     data-testid="driver-phone-input"
                   />
@@ -129,7 +127,7 @@ const DriverLogin = () => {
               <button
                 type="submit"
                 disabled={loading || phone.length < 10}
-                className="w-full bg-[#FF9800] text-white py-4 rounded-lg font-semibold text-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#F57C00] transition-colors"
+                className="w-full bg-[#FFD700] text-black py-4 rounded-lg font-semibold text-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#FFC000] transition-colors"
                 data-testid="send-otp-btn"
               >
                 {loading ? 'Sending...' : 'Get OTP'}
@@ -145,7 +143,7 @@ const DriverLogin = () => {
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="Enter 6-digit OTP"
-                  className="w-full bg-[#1A1A1A] border border-[#333] text-white px-4 py-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF9800] text-2xl text-center tracking-[0.5em] font-mono"
+                  className="w-full bg-[#1A1A1A] border border-[#333] text-white px-4 py-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFD700] text-2xl text-center tracking-[0.5em] font-mono"
                   maxLength={6}
                   autoFocus
                   data-testid="driver-otp-input"
@@ -164,7 +162,7 @@ const DriverLogin = () => {
               <button
                 type="submit"
                 disabled={loading || otp.length !== 6}
-                className="w-full bg-[#FF9800] text-white py-4 rounded-lg font-semibold text-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#F57C00] transition-colors"
+                className="w-full bg-[#FFD700] text-black py-4 rounded-lg font-semibold text-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#FFC000] transition-colors"
                 data-testid="verify-otp-btn"
               >
                 {loading ? 'Verifying...' : 'Verify & Login'}

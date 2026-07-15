@@ -27,31 +27,33 @@ const CorporateLogin = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0047FF]/5 to-[#FAFAFA] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white border-2 border-[#E5E5E5] p-8 shadow-sm">
+        <div className="bg-[#1A1A1A] border border-[#333] p-8 rounded-lg">
           <div className="mb-8 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-[#0047FF] mb-4">
-              <Building size={32} weight="bold" className="text-white" />
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight mb-2" data-testid="corporate-login-title">
+            <img 
+              src="/logo.png" 
+              alt="Mr. Cabie" 
+              className="h-20 mx-auto mb-4"
+            />
+            <h1 className="text-2xl font-bold tracking-tight text-[#FFD700]" data-testid="corporate-login-title">
               Mr. Cabie
             </h1>
-            <p className="text-xs text-[#525252] uppercase tracking-widest">Corporate Portal</p>
+            <p className="text-xs text-gray-400 uppercase tracking-widest mt-1">Corporate Portal</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+              <label className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 block">
                 Email
               </label>
               <div className="relative">
-                <Envelope size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#525252]" />
+                <Envelope size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
+                  className="w-full pl-11 pr-4 py-3 bg-[#0A0A0A] border border-[#333] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFD700] text-sm"
                   required
                   data-testid="corporate-email-input"
                 />
@@ -59,16 +61,16 @@ const CorporateLogin = () => {
             </div>
 
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-[#525252] mb-2 block">
+              <label className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 block">
                 Password
               </label>
               <div className="relative">
-                <Lock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#525252]" />
+                <Lock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#0047FF] focus:ring-offset-2 text-sm"
+                  className="w-full pl-11 pr-4 py-3 bg-[#0A0A0A] border border-[#333] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFD700] text-sm"
                   required
                   data-testid="corporate-password-input"
                 />
@@ -78,7 +80,7 @@ const CorporateLogin = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#0047FF] text-white py-3 font-semibold text-sm hover:bg-[#003BCC] transition-colors duration-150 disabled:opacity-50"
+              className="w-full bg-[#FFD700] text-black py-3 font-semibold text-sm hover:bg-[#FFC000] transition-colors duration-150 disabled:opacity-50 rounded-lg"
               data-testid="corporate-submit-button"
             >
               {loading ? 'Please wait...' : 'Login to Corporate Portal'}
@@ -86,7 +88,7 @@ const CorporateLogin = () => {
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-xs text-[#525252]">
+            <p className="text-xs text-gray-500">
               Need help? Contact your administrator
             </p>
           </div>

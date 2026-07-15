@@ -172,7 +172,7 @@ const DriverDashboard = () => {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
         <div className="text-center">
-          <RefreshCw size={32} className="text-[#FF9800] animate-spin mx-auto mb-4" />
+          <RefreshCw size={32} className="text-[#FFD700] animate-spin mx-auto mb-4" />
           <p className="text-gray-400">Loading...</p>
         </div>
       </div>
@@ -185,11 +185,9 @@ const DriverDashboard = () => {
       <div className="bg-[#1A1A1A] px-4 py-4 sticky top-0 z-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#FF9800] rounded-full flex items-center justify-center">
-              <User size={20} className="text-white" />
-            </div>
+            <img src="/logo.png" alt="Mr. Cabie" className="h-10 w-auto" />
             <div>
-              <h1 className="text-white font-semibold">{driver?.name || 'Driver'}</h1>
+              <h1 className="text-[#FFD700] font-semibold">{driver?.name || 'Driver'}</h1>
               <p className="text-gray-400 text-xs flex items-center gap-1">
                 <span className={`w-2 h-2 rounded-full ${locationEnabled ? 'bg-green-500' : 'bg-red-500'}`}></span>
                 {locationEnabled ? 'Location Active' : 'Location Off'}

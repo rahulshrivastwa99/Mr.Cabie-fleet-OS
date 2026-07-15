@@ -1,11 +1,18 @@
-# Fleet OS - Product Requirements Document
+# Mr. Cabie - Fleet OS Product Requirements Document
 
 ## Overview
-Fleet OS is a production-grade Fleet Operating System for B2B cab/fleet management companies. It consists of:
+Mr. Cabie is a production-grade Fleet Operating System for B2B cab/fleet management companies. It consists of:
 1. **Enterprise Web Platform (Admin Panel)** - For operations team
 2. **Corporate Customer Dashboard** - For client companies
-3. **Driver Mobile App** (Flutter/Android) - **IN DEVELOPMENT**
+3. **Driver Web Portal** - PWA-style web app for drivers
 4. **Passenger Mobile App** (Planned - Android/iOS)
+
+## Branding
+- **Logo**: Mr. Cabie logo with yellow pin marker and mustache
+- **Primary Color**: #FFD700 (Yellow/Gold)
+- **Background**: #0A0A0A (Dark)
+- **Accent**: #1A1A1A (Card backgrounds)
+- **All portals use dark theme with yellow accent colors**
 
 ## Core Architecture
 - **One Booking → Multiple Trips** (for recurring bookings)
