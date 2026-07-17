@@ -91,7 +91,42 @@ Multiple Duty Slips → 1 Invoice (billing cycle)
 ```
 /app
 ├── backend/
-│   ├── server.py              # ALL API routes (4054 lines - needs refactoring)
+│   ├── server.py              # LEGACY monolithic server (4054 lines)
+│   ├── app/                   # NEW REFACTORED STRUCTURE
+│   │   ├── main.py            # FastAPI app entry point
+│   │   ├── config/
+│   │   │   ├── database.py    # MongoDB connection
+│   │   │   └── settings.py    # Environment variables
+│   │   ├── models/
+│   │   │   ├── enums.py       # All enums (Status, Types)
+│   │   │   ├── user.py        # User models
+│   │   │   ├── vehicle.py     # Vehicle models
+│   │   │   ├── driver.py      # Driver models
+│   │   │   ├── client.py      # Client models
+│   │   │   ├── trip.py        # Trip/Duty models
+│   │   │   ├── duty_slip.py   # Duty slip models
+│   │   │   ├── contract.py    # Contract models
+│   │   │   ├── invoice.py     # Invoice models
+│   │   │   ├── corporate.py   # Corporate user/booking models
+│   │   │   └── pricing.py     # Pricing rule models
+│   │   ├── routes/
+│   │   │   ├── admin/         # Admin portal routes
+│   │   │   │   ├── auth.py    # Admin auth + dashboard
+│   │   │   │   ├── vehicles.py
+│   │   │   │   ├── drivers.py
+│   │   │   │   └── clients.py
+│   │   │   ├── corporate/     # Corporate portal routes
+│   │   │   │   ├── auth.py
+│   │   │   │   └── dashboard.py
+│   │   │   └── driver/        # Driver portal routes
+│   │   │       ├── auth.py    # OTP login
+│   │   │       └── trips.py   # Trip actions
+│   │   ├── middleware/
+│   │   │   └── auth.py        # JWT auth, password hashing
+│   │   └── services/
+│   │       ├── otp_service.py     # Twilio OTP
+│   │       ├── pdf_service.py     # AI PDF extraction
+│   │       └── pricing_service.py # Price calculation
 │   ├── requirements.txt       # Python dependencies
 │   ├── .env                   # Environment variables
 │   └── tests/                 # Pytest test files
@@ -505,6 +540,16 @@ flutter run
 - [ ] Push notifications
 - [ ] Offline mode
 - [ ] Branding update
+
+### ✅ COMPLETED (Backend Refactoring)
+- [x] Modular folder structure created
+- [x] Models separated by domain
+- [x] Routes organized by portal (admin/corporate/driver)
+- [x] Services extracted (OTP, PDF, Pricing)
+- [x] Middleware for authentication
+- [ ] Migrate remaining routes from server.py
+- [ ] Test new modular structure
+- [ ] Switch production to new entry point
 
 ### ❌ TODO (Future)
 - [ ] Passenger mobile app
