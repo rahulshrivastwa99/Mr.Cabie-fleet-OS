@@ -89,3 +89,14 @@ frontend/node_modules/.cache/default-development/1.pack
 credentials.json
 *.key
 .credentials
+.env
+
+# Flutter/Android Mobile App
+driver_app/android/.gradle/
+driver_app/android/local.properties
+driver_app/build/
+driver_app/.dart_tool/
+driver_app/.flutter-plugins
+driver_app/.flutter-plugins-dependencies
+.gradle/
+local.properties
