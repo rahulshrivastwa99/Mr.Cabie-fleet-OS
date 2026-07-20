@@ -28,7 +28,7 @@ from app.routes import api_router
 async def lifespan(app: FastAPI):
     """Application lifecycle events"""
     # Startup
-    print("🚀 Mr. Cabie Fleet OS API starting...")
+    print("Mr. Cabie Fleet OS API starting...")
     
     # Initialize admin user if not exists
     from app.config.database import db
@@ -46,14 +46,14 @@ async def lifespan(app: FastAPI):
             "password_hash": get_password_hash("password123"),
             "created_at": datetime.now(timezone.utc).isoformat()
         })
-        print("✅ Default admin user created")
+        print("Default admin user created")
     
-    print("✅ Fleet OS API ready")
+    print("Fleet OS API ready")
     
     yield
     
     # Shutdown
-    print("👋 Fleet OS API shutting down...")
+    print("Fleet OS API shutting down...")
 
 
 # Create FastAPI app

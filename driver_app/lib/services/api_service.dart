@@ -60,16 +60,29 @@ class ApiService {
   }
 
   static Map<String, dynamic> _handleResponse(http.Response response) {
-    final body = jsonDecode(response.body);
+    Map<String, dynamic> body;
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        body = decoded;
+      } else if (decoded is List) {
+        body = {'data': decoded};
+      } else {
+        body = {'detail': response.body};
+      }
+    } catch (_) {
+      if (response.statusCode == 404) {
+        body = {'detail': 'Server error (404): Endpoint not found. Check backend server URL.'};
+      } else {
+        body = {'detail': 'Server error (${response.statusCode}): Could not process server response.'};
+      }
+    }
     
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      if (body is List) {
-        return {'data': body, 'success': true};
-      }
       return {...body, 'success': true};
     } else {
-      final detail = body['detail'] ?? 'An error occurred';
-      throw ApiException(detail, response.statusCode);
+      final detail = body['detail'] ?? 'An error occurred (${response.statusCode})';
+      throw ApiException(detail.toString(), response.statusCode);
     }
   }
 }

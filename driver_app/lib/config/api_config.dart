@@ -6,7 +6,7 @@ class ApiConfig {
   // Build with custom URL: flutter build apk --dart-define=API_BASE_URL=https://your-domain.com/api
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://fleet-os-preview-1.preview.emergentagent.com/api'
+    defaultValue: 'http://10.214.194.234:8001/api'
   );
   
   // API Endpoints

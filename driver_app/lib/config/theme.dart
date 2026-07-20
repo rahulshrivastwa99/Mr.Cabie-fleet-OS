@@ -24,7 +24,6 @@ class AppTheme {
         seedColor: primaryBlue,
         primary: primaryBlue,
         secondary: textSecondary,
-        background: background,
         surface: cardBackground,
         error: error,
       ),
@@ -41,7 +40,7 @@ class AppTheme {
         ),
       ),
       
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: cardBackground,
         elevation: 0,
         shape: RoundedRectangleBorder(
