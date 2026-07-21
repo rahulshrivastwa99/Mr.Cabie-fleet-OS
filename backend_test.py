@@ -8,6 +8,7 @@ import io
 from PIL import Image
 from datetime import datetime, timedelta, timezone
 import base64
+import uuid
 
 # Base URL from frontend/.env
 BASE_URL = "https://duty-slip-flow.preview.emergentagent.com/api"
@@ -37,9 +38,9 @@ def create_test_image():
 
 
 def test_admin_login():
-    """Test A: Admin login"""
+    """Test 1: Admin login"""
     global admin_token
-    print("\n=== Test: Admin Login ===")
+    print("\n=== Test 1: Admin Login ===")
     
     response = requests.post(
         f"{BASE_URL}/auth/login",
@@ -59,19 +60,22 @@ def test_admin_login():
 
 
 def test_create_client():
-    """Test B: Create a client"""
+    """Test 2: Create a client with unique email/phone"""
     global client_id
-    print("\n=== Test: Create Client ===")
+    print("\n=== Test 2: Create Client ===")
     
     headers = {"Authorization": f"Bearer {admin_token}"}
+    
+    # Create new client with timestamp to avoid duplicates
+    timestamp = int(datetime.now().timestamp())
     response = requests.post(
         f"{BASE_URL}/clients",
         headers=headers,
         json={
-            "company_name": "TestCorp",
-            "contact_person": "T",
-            "email": "t@t.com",
-            "phone": "+911111111111",
+            "company_name": f"TestCorp_{timestamp}",
+            "contact_person": "Test Contact",
+            "email": f"test{timestamp}@testcorp.com",
+            "phone": f"+91{timestamp % 10000000000:010d}",
             "gstin": "22AAAAA0000A1Z5"
         }
     )
@@ -89,17 +93,23 @@ def test_create_client():
 
 
 def test_create_vehicle():
-    """Test C: Create a vehicle"""
+    """Test 3: Create a vehicle with all required fields"""
     global vehicle_id
-    print("\n=== Test: Create Vehicle ===")
+    print("\n=== Test 3: Create Vehicle ===")
     
     headers = {"Authorization": f"Bearer {admin_token}"}
+    timestamp = int(datetime.now().timestamp())
+    
     response = requests.post(
         f"{BASE_URL}/vehicles",
         headers=headers,
         json={
-            "registration_number": "TS01AB1234",
-            "vehicle_type": "SEDAN"
+            "registration_number": f"TS{timestamp % 100:02d}AB{timestamp % 10000:04d}",
+            "vehicle_type": "SEDAN",
+            "model": "Dzire",
+            "manufacturer": "Maruti",
+            "year": 2023,
+            "capacity": 4
         }
     )
     
@@ -116,18 +126,24 @@ def test_create_vehicle():
 
 
 def test_create_driver():
-    """Test D: Create a driver"""
-    global driver_id
-    print("\n=== Test: Create Driver ===")
+    """Test 4: Create a driver with unique phone"""
+    global driver_id, DRIVER_PHONE
+    print("\n=== Test 4: Create Driver ===")
     
     headers = {"Authorization": f"Bearer {admin_token}"}
+    
+    # Generate unique phone number
+    timestamp = int(datetime.now().timestamp())
+    DRIVER_PHONE = f"+91{timestamp % 10000000000:010d}"
+    
     response = requests.post(
         f"{BASE_URL}/drivers",
         headers=headers,
         json={
             "name": "Test Driver",
+            "email": f"testdriver{timestamp}@fleet.com",
             "phone": DRIVER_PHONE,
-            "license_number": "LIC123"
+            "license_number": f"LIC{timestamp % 100000:05d}"
         }
     )
     
@@ -139,16 +155,17 @@ def test_create_driver():
     assert "id" in data, "No driver ID in response"
     
     driver_id = data["id"]
-    print(f"✅ Driver created with ID: {driver_id}")
+    print(f"✅ Driver created with ID: {driver_id}, phone: {DRIVER_PHONE}")
     return True
 
 
-def test_create_trip():
-    """Test E: Create a trip/duty"""
+def test_create_trip_via_api():
+    """Test 5: Create a trip via POST /api/duties"""
     global trip_id
-    print("\n=== Test: Create Trip ===")
+    print("\n=== Test 5: Create Trip via API ===")
     
     headers = {"Authorization": f"Bearer {admin_token}"}
+    
     pickup_time = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
     
     response = requests.post(
@@ -156,12 +173,12 @@ def test_create_trip():
         headers=headers,
         json={
             "client_id": client_id,
+            "trip_type": "ONE_WAY",
             "pickup_location": "Connaught Place, New Delhi",
             "dropoff_location": "India Gate, New Delhi",
             "pickup_time": pickup_time,
-            "passenger_name": "John Doe",
-            "passenger_phone": "+919876543210",
-            "trip_type": "ONE_WAY"
+            "passenger_name": "Test Passenger",
+            "passenger_phone": "+919000000000"
         }
     )
     
@@ -173,21 +190,22 @@ def test_create_trip():
     assert "id" in data, "No trip ID in response"
     
     trip_id = data["id"]
-    print(f"✅ Trip created with ID: {trip_id}")
+    print(f"✅ Trip created via API with ID: {trip_id}")
     return True
 
 
-def test_assign_trip():
-    """Test F: Assign driver and vehicle to trip"""
-    print("\n=== Test: Assign Trip ===")
+def test_assign_trip_via_api():
+    """Test 6: Assign driver and vehicle via PATCH /api/duties/{trip_id}/assign"""
+    print("\n=== Test 6: Assign Trip via API ===")
     
     headers = {"Authorization": f"Bearer {admin_token}"}
+    
     response = requests.patch(
         f"{BASE_URL}/duties/{trip_id}/assign",
         headers=headers,
         json={
-            "driver_id": driver_id,
-            "vehicle_id": vehicle_id
+            "vehicle_id": vehicle_id,
+            "driver_id": driver_id
         }
     )
     
@@ -195,26 +213,22 @@ def test_assign_trip():
     print(f"Response: {response.text}")
     
     assert response.status_code == 200, f"Trip assignment failed: {response.text}"
-    
-    # Verify trip is ASSIGNED
-    response = requests.get(
-        f"{BASE_URL}/duties/{trip_id}",
-        headers=headers
-    )
     data = response.json()
     assert data["status"] == "ASSIGNED", f"Trip status is {data['status']}, expected ASSIGNED"
+    assert data["driver_id"] == driver_id, "Driver ID mismatch"
+    assert data["vehicle_id"] == vehicle_id, "Vehicle ID mismatch"
     
-    print(f"✅ Trip assigned successfully, status: {data['status']}")
+    print(f"✅ Trip assigned successfully to driver {driver_id} and vehicle {vehicle_id}")
     return True
 
 
 def test_driver_otp_login():
-    """Test G: Driver OTP login"""
+    """Test 7: Driver OTP login"""
     global driver_token
-    print("\n=== Test: Driver OTP Login ===")
+    print("\n=== Test 7: Driver OTP Login ===")
     
     # Send OTP
-    print("Sending OTP...")
+    print(f"Sending OTP to {DRIVER_PHONE}...")
     response = requests.post(
         f"{BASE_URL}/driver/auth/send-otp",
         json={"phone": DRIVER_PHONE}
@@ -225,11 +239,15 @@ def test_driver_otp_login():
     
     assert response.status_code == 200, f"Send OTP failed: {response.text}"
     
+    # Get debug OTP if available
+    response_data = response.json()
+    otp_to_use = response_data.get("debug_otp", DEV_OTP)
+    
     # Verify OTP
-    print("Verifying OTP...")
+    print(f"Verifying OTP: {otp_to_use}...")
     response = requests.post(
         f"{BASE_URL}/driver/auth/verify-otp",
-        json={"phone": DRIVER_PHONE, "otp": DEV_OTP}
+        json={"phone": DRIVER_PHONE, "otp": otp_to_use}
     )
     
     print(f"Verify OTP Status: {response.status_code}")
@@ -237,16 +255,42 @@ def test_driver_otp_login():
     
     assert response.status_code == 200, f"Verify OTP failed: {response.text}"
     data = response.json()
-    assert "access_token" in data, "No access token in response"
+    assert "token" in data, "No access token in response"
     
-    driver_token = data["access_token"]
+    driver_token = data["token"]
     print(f"✅ Driver login successful, token: {driver_token[:20]}...")
     return True
 
 
+def test_driver_get_trips():
+    """Test 8: Driver can see assigned trip via GET /api/driver/trips"""
+    print("\n=== Test 8: Driver Get Trips ===")
+    
+    headers = {"Authorization": f"Bearer {driver_token}"}
+    response = requests.get(
+        f"{BASE_URL}/driver/trips",
+        headers=headers
+    )
+    
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
+    
+    assert response.status_code == 200, f"Get trips failed: {response.text}"
+    trips = response.json()
+    assert isinstance(trips, list), "Response should be a list"
+    assert len(trips) > 0, "Driver should have at least one trip"
+    
+    # Verify our trip is in the list
+    trip_ids = [t["id"] for t in trips]
+    assert trip_id in trip_ids, f"Trip {trip_id} not found in driver's trips"
+    
+    print(f"✅ Driver can see {len(trips)} trip(s), including trip {trip_id}")
+    return True
+
+
 def test_driver_accept_trip():
-    """Test H: Driver accepts trip"""
-    print("\n=== Test: Driver Accept Trip ===")
+    """Test 9: Driver accepts trip"""
+    print("\n=== Test 9: Driver Accept Trip ===")
     
     headers = {"Authorization": f"Bearer {driver_token}"}
     response = requests.patch(
@@ -281,7 +325,6 @@ def test_trip_start_with_location():
         headers=headers,
         json={
             "opening_km": 12345.0,
-            "driver_remarks": "Starting",
             "latitude": 28.6139,
             "longitude": 77.2090,
             "address": "Connaught Place, New Delhi"
@@ -425,6 +468,23 @@ def test_upload_photo_validation():
     
     assert response.status_code == 400, f"Expected 400 for invalid file type, got {response.status_code}"
     
+    # Test 3: No JWT (auth guard)
+    print("Testing auth guard (no JWT)...")
+    img_bytes = create_test_image()
+    files = {'photo': ('test.jpg', img_bytes, 'image/jpeg')}
+    data = {'photo_type': 'start'}
+    
+    response = requests.post(
+        f"{BASE_URL}/driver/trips/{trip_id}/upload-photo",
+        files=files,
+        data=data
+    )
+    
+    print(f"No JWT status: {response.status_code}")
+    print(f"No JWT response: {response.text}")
+    
+    assert response.status_code in [401, 403], f"Expected 401 or 403 without JWT, got {response.status_code}"
+    
     print("✅ Test C PASSED: Photo upload validation working correctly")
     return True
 
@@ -445,7 +505,6 @@ def test_trip_complete_with_location():
             "closing_km": 12365.5,
             "traveller_name": "John Doe",
             "passenger_signature": signature_base64,
-            "driver_remarks": "Trip complete",
             "latitude": 28.6304,
             "longitude": 77.2177,
             "address": "India Gate, New Delhi"
@@ -460,7 +519,7 @@ def test_trip_complete_with_location():
     result = response.json()
     assert result["total_km"] == 20.5, f"Total KM mismatch: {result['total_km']}, expected 20.5"
     
-    # Verify trip details (trip might be in history now)
+    # Verify trip details
     response = requests.get(
         f"{BASE_URL}/driver/trips/{trip_id}",
         headers=headers
@@ -541,27 +600,33 @@ def test_upload_end_photo():
     return True
 
 
-def test_auth_guard():
-    """Test F — Auth guard"""
-    print("\n=== Test F: Auth Guard ===")
+def test_driver_location_endpoint():
+    """Test F — Driver location endpoint (NEW)"""
+    print("\n=== Test F: Driver Location Endpoint ===")
     
-    # Try to upload photo without JWT
-    img_bytes = create_test_image()
-    files = {'photo': ('test.jpg', img_bytes, 'image/jpeg')}
-    data = {'photo_type': 'start'}
+    headers = {"Authorization": f"Bearer {driver_token}"}
     
     response = requests.post(
-        f"{BASE_URL}/driver/trips/{trip_id}/upload-photo",
-        files=files,
-        data=data
+        f"{BASE_URL}/driver/location",
+        headers=headers,
+        json={
+            "latitude": 28.6139,
+            "longitude": 77.2090,
+            "accuracy": 5.0,
+            "trip_id": trip_id
+        }
     )
     
     print(f"Status: {response.status_code}")
     print(f"Response: {response.text}")
     
-    assert response.status_code in [401, 403], f"Expected 401 or 403 without JWT, got {response.status_code}"
+    assert response.status_code == 200, f"Driver location update failed: {response.text}"
     
-    print("✅ Test F PASSED: Auth guard working correctly")
+    result = response.json()
+    assert "message" in result, "No message in response"
+    assert "timestamp" in result, "No timestamp in response"
+    
+    print(f"✅ Test F PASSED: Driver location endpoint working correctly")
     return True
 
 
@@ -572,20 +637,21 @@ def run_all_tests():
     print("=" * 80)
     
     tests = [
-        ("Admin Login", test_admin_login),
-        ("Create Client", test_create_client),
-        ("Create Vehicle", test_create_vehicle),
-        ("Create Driver", test_create_driver),
-        ("Create Trip", test_create_trip),
-        ("Assign Trip", test_assign_trip),
-        ("Driver OTP Login", test_driver_otp_login),
-        ("Driver Accept Trip", test_driver_accept_trip),
-        ("Test A: Trip Start with Location", test_trip_start_with_location),
-        ("Test B: Upload Start Photo", test_upload_start_photo),
-        ("Test C: Upload Photo Validation", test_upload_photo_validation),
-        ("Test D: Trip Complete with Location", test_trip_complete_with_location),
-        ("Test E: Upload End Photo", test_upload_end_photo),
-        ("Test F: Auth Guard", test_auth_guard),
+        ("1. Admin Login", test_admin_login),
+        ("2. Create Client", test_create_client),
+        ("3. Create Vehicle", test_create_vehicle),
+        ("4. Create Driver", test_create_driver),
+        ("5. Create Trip via API", test_create_trip_via_api),
+        ("6. Assign Trip via API", test_assign_trip_via_api),
+        ("7. Driver OTP Login", test_driver_otp_login),
+        ("8. Driver Get Trips", test_driver_get_trips),
+        ("9. Driver Accept Trip", test_driver_accept_trip),
+        ("A. Trip Start with Location", test_trip_start_with_location),
+        ("B. Upload Start Photo", test_upload_start_photo),
+        ("C. Upload Photo Validation", test_upload_photo_validation),
+        ("D. Trip Complete with Location", test_trip_complete_with_location),
+        ("E. Upload End Photo", test_upload_end_photo),
+        ("F. Driver Location Endpoint", test_driver_location_endpoint),
     ]
     
     passed = 0

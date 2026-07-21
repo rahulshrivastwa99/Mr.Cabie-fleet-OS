@@ -4,6 +4,7 @@ from .auth import router as auth_router
 from .vehicles import router as vehicles_router
 from .drivers import router as drivers_router
 from .clients import router as clients_router
+from .duties import router as duties_router
 
 router = APIRouter()
 
@@ -12,6 +13,7 @@ router.include_router(auth_router)
 router.include_router(vehicles_router)
 router.include_router(drivers_router)
 router.include_router(clients_router)
+router.include_router(duties_router)
 
 # Note: Add more route imports here as they are created
 # from .trips import router as trips_router

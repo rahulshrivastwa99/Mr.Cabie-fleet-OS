@@ -15,8 +15,8 @@ async def driver_send_otp(data: DriverOTPRequest):
     """Send OTP to driver's phone for login"""
     phone = data.phone.strip()[-10:]  # Get last 10 digits
     
-    # Check if driver exists
-    driver = await db.drivers.find_one({"phone": phone})
+    # Check if driver exists (search by last 10 digits using regex)
+    driver = await db.drivers.find_one({"phone": {"$regex": f"{phone}$"}})
     if not driver:
         raise HTTPException(status_code=404, detail="Driver not registered. Contact your fleet operator.")
     
@@ -43,8 +43,8 @@ async def driver_verify_otp(data: DriverOTPVerify):
     if not is_valid:
         raise HTTPException(status_code=401, detail="Invalid or expired OTP")
     
-    # Get driver
-    driver = await db.drivers.find_one({"phone": phone}, {"_id": 0})
+    # Get driver (search by last 10 digits using regex)
+    driver = await db.drivers.find_one({"phone": {"$regex": f"{phone}$"}}, {"_id": 0})
     if not driver:
         raise HTTPException(status_code=404, detail="Driver not found")
     
