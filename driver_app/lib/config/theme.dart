@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // Brand Colors
+  // Mr. Cabie Brand Colors — a rich royal blue paired with a warm yellow
+  // accent (classic taxi vibe) plus neutral surface palette. Adjust to
+  // match final marketing palette when brand guidelines land.
   static const Color primaryBlue = Color(0xFF0047FF);
-  static const Color primaryDark = Color(0xFF003BCC);
-  static const Color success = Color(0xFF00C853);
-  static const Color warning = Color(0xFFFF9800);
-  static const Color error = Color(0xFFE00000);
+  static const Color primaryDark = Color(0xFF002E9E);
+  static const Color primaryAccent = Color(0xFFFFC700); // Mr. Cabie yellow
+  static const Color success = Color(0xFF00A65A);
+  static const Color warning = Color(0xFFF39C12);
+  static const Color error = Color(0xFFDC3545);
   static const Color textPrimary = Color(0xFF0A0A0A);
   static const Color textSecondary = Color(0xFF525252);
-  static const Color background = Color(0xFFFAFAFA);
+  static const Color background = Color(0xFFF7F8FB);
   static const Color cardBackground = Color(0xFFFFFFFF);
   static const Color borderColor = Color(0xFFE5E5E5);
 

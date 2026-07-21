@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../config/theme.dart';
+import '../services/photo_service.dart';
+import '../utils/permission_helpers.dart';
 
 /// A card that lets the driver capture (or replace) a photo from the
 /// camera. When a photo is captured [onCaptured] is fired with the file.
@@ -37,6 +39,10 @@ class _PhotoCaptureCardState extends State<PhotoCaptureCard> {
   }
 
   Future<void> _pickFromCamera() async {
+    // Founder-requested guardrail: gate on Camera permission before opening picker
+    final ok = await PermissionHelpers.ensureCamera(context);
+    if (!ok) return;
+
     setState(() => _busy = true);
     try {
       final picker = ImagePicker();
@@ -47,9 +53,11 @@ class _PhotoCaptureCardState extends State<PhotoCaptureCard> {
         preferredCameraDevice: CameraDevice.rear,
       );
       if (xfile == null) return;
-      final file = File(xfile.path);
-      setState(() => _photo = file);
-      widget.onCaptured(file);
+      // Compress the picture to keep low-RAM devices happy and speed up uploads
+      final compressed = await PhotoService.compress(File(xfile.path));
+      final persisted = await PhotoService.persistToAppDir(compressed);
+      setState(() => _photo = persisted);
+      widget.onCaptured(persisted);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

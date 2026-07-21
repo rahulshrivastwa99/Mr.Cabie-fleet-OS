@@ -4,6 +4,8 @@ import '../config/theme.dart';
 import '../providers/auth_provider.dart';
 import '../providers/trip_provider.dart';
 import '../services/location_service.dart';
+import '../services/connectivity_service.dart';
+import '../services/offline_queue_service.dart';
 import '../widgets/trip_card.dart';
 import 'login_screen.dart';
 import 'trip_detail_screen.dart';
@@ -92,7 +94,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: const Text('Fleet OS Driver'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.local_taxi, size: 22, color: Colors.white),
+            SizedBox(width: 8),
+            Text('MR. CABIE',
+                style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 2)),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -104,12 +114,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _currentIndex,
+      body: Column(
         children: [
-          _buildTripsTab(),
-          _buildHistoryTab(),
-          _buildProfileTab(),
+          const _OfflineStatusBar(),
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: [
+                _buildTripsTab(),
+                _buildHistoryTab(),
+                _buildProfileTab(),
+              ],
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -363,6 +380,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           // Info Cards
           _buildInfoCard('License Number', driver?.licenseNumber ?? 'N/A', Icons.badge),
           _buildInfoCard('Email', driver?.email ?? 'N/A', Icons.email),
+          _buildInfoCard('App', 'Mr. Cabie Driver v1.0.0', Icons.info_outline),
+          _buildInfoCard(
+            'Pending sync',
+            '${OfflineQueueService.instance.pendingCount} item(s)',
+            Icons.sync,
+          ),
           
           const SizedBox(height: 24),
           
@@ -377,6 +400,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 side: const BorderSide(color: AppTheme.error),
               ),
             ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '© Mr. Cabie Fleet OS',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, letterSpacing: 1),
           ),
         ],
       ),
@@ -550,3 +578,64 @@ class ActiveTripBanner extends StatelessWidget {
     );
   }
 }
+
+/// Slim banner at the top of the home screen that shows connection status
+/// and the number of pending offline actions waiting to sync. Silent when
+/// online AND the queue is empty (no visual noise for the happy path).
+class _OfflineStatusBar extends StatefulWidget {
+  const _OfflineStatusBar();
+
+  @override
+  State<_OfflineStatusBar> createState() => _OfflineStatusBarState();
+}
+
+class _OfflineStatusBarState extends State<_OfflineStatusBar> {
+  bool _online = ConnectivityService.instance.isOnline;
+  int _pending = OfflineQueueService.instance.pendingCount;
+
+  @override
+  void initState() {
+    super.initState();
+    ConnectivityService.instance.onStatusChange.listen((v) {
+      if (mounted) setState(() => _online = v);
+    });
+    OfflineQueueService.instance.onSizeChange.listen((n) {
+      if (mounted) setState(() => _pending = n);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_online && _pending == 0) return const SizedBox.shrink();
+    final bg = _online ? AppTheme.warning : AppTheme.error;
+    final icon = _online ? Icons.sync : Icons.wifi_off;
+    final msg = _online
+        ? 'Syncing $_pending pending item${_pending == 1 ? '' : 's'}…'
+        : (_pending > 0
+            ? 'Offline — $_pending item${_pending == 1 ? '' : 's'} queued. Will sync when back.'
+            : 'You are offline. Actions will be queued.');
+    return Container(
+      width: double.infinity,
+      color: bg,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.white, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              msg,
+              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+            ),
+          ),
+          if (_online && _pending > 0)
+            TextButton(
+              onPressed: () => OfflineQueueService.instance.flush(),
+              child: const Text('SYNC', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+

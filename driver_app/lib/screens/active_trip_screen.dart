@@ -10,6 +10,7 @@ import '../services/geocoding_service.dart';
 import '../services/location_service.dart';
 import '../widgets/location_stamp_card.dart';
 import '../widgets/photo_capture_card.dart';
+import 'duty_slip_preview_screen.dart';
 
 class ActiveTripScreen extends StatefulWidget {
   final String tripId;
@@ -64,6 +65,9 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
     );
 
     if (totalKm != null && mounted) {
+      // Refresh trip so we pull latest duty slip (photos, timestamps, etc.)
+      final refreshed = await tripProvider.loadTripDetail(widget.tripId);
+      if (!mounted) return;
       await showDialog(
         context: context,
         barrierDismissible: false,
@@ -89,12 +93,25 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
             ],
           ),
           actions: [
-            ElevatedButton(
+            TextButton(
               onPressed: () {
                 Navigator.pop(context); // Close dialog
                 Navigator.pop(context); // Back to home
               },
-              child: const Text('Done'),
+              child: const Text('DONE'),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.description_outlined, size: 18),
+              label: const Text('VIEW SLIP'),
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DutySlipPreviewScreen(trip: refreshed ?? _trip!),
+                  ),
+                );
+              },
             ),
           ],
         ),

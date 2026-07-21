@@ -83,8 +83,41 @@ class TripService {
 
   /// Uploads a photo captured on trip start or completion.
   /// [photoType] must be "start" or "end".
+  /// Retries up to 3 times on network failure before giving up.
   /// Returns the server-side photo URL.
   static Future<String> uploadTripPhoto(
+    String tripId,
+    File photoFile, {
+    required String photoType,
+    int maxAttempts = 3,
+  }) async {
+    Object? lastError;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await _uploadTripPhotoOnce(tripId, photoFile, photoType: photoType);
+      } on ApiException catch (e) {
+        lastError = e;
+        // Don't retry client errors (400/401/403/413) — only network/5xx.
+        if (e.statusCode >= 400 && e.statusCode < 500 && e.statusCode != 0) {
+          rethrow;
+        }
+        if (attempt < maxAttempts) {
+          await Future.delayed(Duration(milliseconds: 600 * attempt));
+        }
+      } catch (e) {
+        lastError = e;
+        if (attempt < maxAttempts) {
+          await Future.delayed(Duration(milliseconds: 600 * attempt));
+        }
+      }
+    }
+    throw ApiException(
+      'Photo upload failed after $maxAttempts attempts: $lastError',
+      0,
+    );
+  }
+
+  static Future<String> _uploadTripPhotoOnce(
     String tripId,
     File photoFile, {
     required String photoType,
@@ -107,7 +140,7 @@ class TripService {
       photoFile.path,
     ));
 
-    final streamed = await request.send();
+    final streamed = await request.send().timeout(const Duration(seconds: 45));
     final response = await http.Response.fromStream(streamed);
 
     Map<String, dynamic> body;
@@ -116,6 +149,16 @@ class TripService {
       body = decoded is Map<String, dynamic> ? decoded : {'detail': response.body};
     } catch (_) {
       body = {'detail': 'Server error (${response.statusCode})'};
+    }
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      // Same session-expired treatment as normal API calls
+      await ApiService.clearToken();
+      AuthEvents.emit(AuthEvent.unauthorized);
+      throw ApiException(
+        (body['detail'] ?? 'Session expired. Please log in again.').toString(),
+        response.statusCode,
+      );
     }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {

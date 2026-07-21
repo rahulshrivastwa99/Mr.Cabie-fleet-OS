@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import '../config/api_config.dart';
 import 'api_service.dart';
+import 'connectivity_service.dart';
+import 'offline_queue_service.dart';
 
 class LocationService {
   static StreamSubscription<Position>? _positionStream;
@@ -93,17 +95,40 @@ class LocationService {
     
     if (_lastPosition == null) return;
 
+    final payload = {
+      'latitude': _lastPosition!.latitude,
+      'longitude': _lastPosition!.longitude,
+      'accuracy': _lastPosition!.accuracy,
+      'speed': _lastPosition!.speed,
+      'heading': _lastPosition!.heading,
+    };
+
+    // If we're offline, queue the ping instead of dropping it. This makes the
+    // driver's post-trip location history complete once we're back online.
+    if (!ConnectivityService.instance.isOnline) {
+      await OfflineQueueService.instance.enqueue(QueuedAction(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        type: QueuedActionType.locationPing,
+        tripId: '-',
+        payload: payload,
+        createdAt: DateTime.now(),
+      ));
+      return;
+    }
+
     try {
-      await ApiService.post(ApiConfig.updateLocation, {
-        'latitude': _lastPosition!.latitude,
-        'longitude': _lastPosition!.longitude,
-        'accuracy': _lastPosition!.accuracy,
-        'speed': _lastPosition!.speed,
-        'heading': _lastPosition!.heading,
-      });
-      print('Location updated: ${_lastPosition!.latitude}, ${_lastPosition!.longitude}');
+      await ApiService.post(ApiConfig.updateLocation, payload);
     } catch (e) {
-      print('Error sending location update: $e');
+      // Fallback: queue on any transient error
+      try {
+        await OfflineQueueService.instance.enqueue(QueuedAction(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          type: QueuedActionType.locationPing,
+          tripId: '-',
+          payload: payload,
+          createdAt: DateTime.now(),
+        ));
+      } catch (_) {}
     }
   }
 
