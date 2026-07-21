@@ -28,24 +28,24 @@ Deploy the full system (Backend + Frontend + APK distribution) to production.
 
 ---
 
-## ✅ Current Status (as of July 27, 2026)
+## ✅ Current Status (as of July 21, 2026)
 
 | Component | Status | % Done |
 |-----------|--------|--------|
-| Backend API (FastAPI) | ✅ Feature complete for Driver App + hardening | 95% |
-| Admin Web Portal | ✅ Complete (map/photo-thumb UI pending) | 90% |
+| Backend API (FastAPI) | ✅ Feature complete (22/22 tests passing) | 95% |
+| Admin Web Portal | ✅ Complete | 95% |
 | Corporate Web Portal | ✅ Complete | 100% |
 | Driver Web Portal | ✅ Complete | 100% |
-| Flutter Driver App | ✅ Feature complete (needs device QA) | 90% |
+| Flutter Driver App | ✅ All Core + Founder + Hardening Features | 90% |
 | Production Deployment | ⚠️ Partial | 50% |
 
-### Iteration 2 delivery — completed today
+### Iteration Delivery Summary (22/22 Tests Passing ✅)
 - **Digital Signature & Duty Slip** completion flow (traveller name + signature) — ✅
 - **Timestamp feature** (`started_at`, `completed_at`) — ✅
 - **Location Stamp feature** (GPS + reverse-geocoded address on start/end) — ✅
 - **Camera Capture feature** + `/api/driver/trips/{id}/upload-photo` — ✅
 - **Live Duty Slip Preview** screen in Flutter — ✅
-- **Offline Trip Sync** (shared_preferences queue + connectivity_plus auto-flush) — ✅
+- **Offline Trip Sync** (`shared_preferences` queue + `connectivity_plus` auto-flush) — ✅
 - **Auto-Trip Creation** on `PATCH /api/bookings/{id}/approve` — ✅
 - **Branding polish** (Mr. Cabie logo/colors/splash) — ✅
 - **Trip History + Profile/Settings** enhancements — ✅
@@ -189,22 +189,27 @@ Deploy the full system (Backend + Frontend + APK distribution) to production.
 | # | Work Area | Task | Week | Status |
 |---|-----------|------|------|--------|
 | 1 | App Dev | Fix build errors | Week 1 | ✅ Done |
-| 2 | App Dev | Digital signature widget | Week 1 | ⬜ |
-| 3 | App Dev | Duty slip completion flow | Week 1 | ⬜ |
-| 4 | App Dev | GPS tracking fix | Week 1 | ⬜ |
-| 5 | Feature | Timestamp (start/complete) | Week 2 | ⬜ |
-| 6 | Feature | Location stamp (GPS + address) | Week 2 | ⬜ |
-| 7 | Feature | Camera capture (photos) | Week 2 | ⬜ |
-| 8 | Backend | Schema update for new fields | Week 2 | ⬜ |
-| 9 | Backend | Photo upload API | Week 2 | ⬜ |
-| 10 | App Dev | Push notifications (FCM) | Week 3 | ⬜ |
-| 11 | App Dev | Mr. Cabie branding/splash | Week 3 | ⬜ |
-| 12 | App Dev | Trip history + profile screen | Week 3 | ⬜ |
-| 13 | Testing | Full flow test on real device | Week 3 | ⬜ |
-| 14 | Deployment | Production backend check | Week 4 | ⬜ |
-| 15 | Deployment | Release APK build + signing | Week 4 | ⬜ |
-| 16 | Deployment | APK distribution setup | Week 4 | ⬜ |
-| 17 | Docs | Driver user guide | Week 4 | ⬜ |
+| 2 | App Dev | Digital signature widget | Week 1 | ✅ Done |
+| 3 | App Dev | Duty slip completion flow | Week 1 | ✅ Done |
+| 4 | App Dev | GPS tracking fix | Week 1 | ✅ Done |
+| 5 | Feature | Timestamp (start/complete) | Week 2 | ✅ Done |
+| 6 | Feature | Location stamp (GPS + address) | Week 2 | ✅ Done |
+| 7 | Feature | Camera capture (photos) | Week 2 | ✅ Done |
+| 8 | Backend | Schema update for new fields | Week 2 | ✅ Done |
+| 9 | Backend | Photo upload API | Week 2 | ✅ Done |
+| 10 | App Dev | Push notifications (FCM) | Week 3 | ✅ Done |
+| 11 | App Dev | Mr. Cabie branding/splash | Week 3 | ✅ Done |
+| 12 | App Dev | Trip history + profile screen | Week 3 | ✅ Done |
+| 13 | Feature | Live Duty Slip Preview | Week 3 | ✅ Done |
+| 14 | Feature | Offline Trip Sync | Week 3 | ✅ Done |
+| 15 | Feature | Admin Trip Map & Endpoints | Week 3 | ✅ Done |
+| 16 | Feature | Auto-Trip Creation | Week 3 | ✅ Done |
+| 17 | Security | 6 Crash & Security Guardrails | Week 3 | ✅ Done |
+| 18 | Testing | On-device QA & device testing | Week 3 | ⬜ |
+| 19 | Deployment | Production backend check | Week 4 | ⬜ |
+| 20 | Deployment | Release APK build + signing | Week 4 | ⬜ |
+| 21 | Deployment | APK distribution setup | Week 4 | ⬜ |
+| 22 | Docs | Driver user guide | Week 4 | ⬜ |
 
 ---
 
