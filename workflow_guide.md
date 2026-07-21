@@ -42,7 +42,7 @@
 
 To keep your laptop cool and fast:
 - **Do NOT run heavy local servers on laptop.**
-- Point the Driver App directly to the **Emergent Cloud Backend** (`https://fleet-os-preview-1.preview.emergentagent.com/api` or `https://fleet-os-preview-1.emergent.host/api`).
+- Point the Driver App directly to the **Emergent Cloud Backend** (`https://duty-slip-flow.preview.emergentagent.com/api` or `https://fleet-os-preview-1.emergent.host/api`).
 - Your laptop only compiles the Flutter code to your phone once, and then uses lightweight **Hot Reload (`r`)**.
 
 ---

@@ -23,10 +23,15 @@ dependencies:
   
   # Location
   geolocator: ^10.1.0
+  geocoding: ^2.1.1
   permission_handler: ^11.1.0
   
   # Maps (Google Maps - requires API key)
   google_maps_flutter: ^2.5.0
+  
+  # Camera / Image capture
+  image_picker: ^1.0.4
+  path_provider: ^2.1.1
   
   # UI Components
   cupertino_icons: ^1.0.6

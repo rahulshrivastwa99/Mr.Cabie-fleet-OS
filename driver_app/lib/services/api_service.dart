@@ -23,6 +23,10 @@ class ApiService {
 
   static bool get isAuthenticated => _token != null;
 
+  static String? get token => _token;
+
+  static String get baseUrl => ApiConfig.baseUrl;
+
   static Map<String, String> get _headers {
     final headers = {
       'Content-Type': 'application/json',

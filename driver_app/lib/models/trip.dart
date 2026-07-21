@@ -102,6 +102,16 @@ class DutySlip {
   final String? endTime;
   final String? driverRemarks;
   final String? passengerSignature;
+  final String? travellerName;
+  // Founder-requested feature: precise timestamps
+  final String? startedAt;
+  final String? completedAt;
+  // Founder-requested feature: location stamps {latitude, longitude, address, timestamp}
+  final Map<String, dynamic>? startLocation;
+  final Map<String, dynamic>? endLocation;
+  // Founder-requested feature: camera capture photo URLs
+  final String? startPhotoUrl;
+  final String? endPhotoUrl;
 
   DutySlip({
     required this.id,
@@ -116,6 +126,13 @@ class DutySlip {
     this.endTime,
     this.driverRemarks,
     this.passengerSignature,
+    this.travellerName,
+    this.startedAt,
+    this.completedAt,
+    this.startLocation,
+    this.endLocation,
+    this.startPhotoUrl,
+    this.endPhotoUrl,
   });
 
   factory DutySlip.fromJson(Map<String, dynamic> json) {
@@ -124,14 +141,25 @@ class DutySlip {
       tripId: json['trip_id'] ?? '',
       driverId: json['driver_id'],
       vehicleId: json['vehicle_id'],
-      openingKm: json['opening_km']?.toDouble(),
-      closingKm: json['closing_km']?.toDouble(),
-      totalKm: json['total_km']?.toDouble(),
+      openingKm: (json['opening_km'] as num?)?.toDouble(),
+      closingKm: (json['closing_km'] as num?)?.toDouble(),
+      totalKm: (json['total_km'] as num?)?.toDouble(),
       status: json['status'] ?? 'DRAFT',
       startTime: json['start_time'],
       endTime: json['end_time'],
       driverRemarks: json['driver_remarks'],
       passengerSignature: json['passenger_signature'],
+      travellerName: json['traveller_name'],
+      startedAt: json['started_at'],
+      completedAt: json['completed_at'],
+      startLocation: json['start_location'] is Map
+          ? Map<String, dynamic>.from(json['start_location'])
+          : null,
+      endLocation: json['end_location'] is Map
+          ? Map<String, dynamic>.from(json['end_location'])
+          : null,
+      startPhotoUrl: json['start_photo_url'],
+      endPhotoUrl: json['end_photo_url'],
     );
   }
 }

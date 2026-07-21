@@ -1,426 +1,629 @@
+"""
+Backend Test Suite for Founder-Requested Driver App Features
+Tests timestamp, location stamp, and camera capture features
+"""
 import requests
-import sys
 import json
-from datetime import datetime, timedelta
+import io
+from PIL import Image
+from datetime import datetime, timedelta, timezone
+import base64
 
-class FleetOSAPITester:
-    def __init__(self, base_url="https://fleet-os-preview-1.preview.emergentagent.com/api"):
-        self.base_url = base_url
-        self.token = None
-        self.tests_run = 0
-        self.tests_passed = 0
-        self.test_results = []
+# Base URL from frontend/.env
+BASE_URL = "https://duty-slip-flow.preview.emergentagent.com/api"
 
-    def log_test(self, name, success, details=""):
-        """Log test result"""
-        self.tests_run += 1
-        if success:
-            self.tests_passed += 1
-            print(f"✅ {name}")
-        else:
-            print(f"❌ {name} - {details}")
-        
-        self.test_results.append({
-            "test": name,
-            "success": success,
-            "details": details
-        })
+# Test credentials
+ADMIN_EMAIL = "admin@fleetOS.com"
+ADMIN_PASSWORD = "password123"
+DRIVER_PHONE = "+919999999999"
+DEV_OTP = "123456"
 
-    def run_test(self, name, method, endpoint, expected_status, data=None, headers=None):
-        """Run a single API test"""
-        url = f"{self.base_url}/{endpoint}"
-        test_headers = {'Content-Type': 'application/json'}
-        
-        if self.token:
-            test_headers['Authorization'] = f'Bearer {self.token}'
-        
-        if headers:
-            test_headers.update(headers)
+# Global variables to store IDs
+admin_token = None
+driver_token = None
+client_id = None
+vehicle_id = None
+driver_id = None
+trip_id = None
 
-        try:
-            if method == 'GET':
-                response = requests.get(url, headers=test_headers)
-            elif method == 'POST':
-                response = requests.post(url, json=data, headers=test_headers)
-            elif method == 'PUT':
-                response = requests.put(url, json=data, headers=test_headers)
-            elif method == 'PATCH':
-                response = requests.patch(url, json=data, headers=test_headers)
-            elif method == 'DELETE':
-                response = requests.delete(url, headers=test_headers)
 
-            success = response.status_code == expected_status
-            details = f"Status: {response.status_code}"
-            
-            if not success:
-                details += f", Expected: {expected_status}"
-                try:
-                    error_data = response.json()
-                    details += f", Response: {error_data}"
-                except:
-                    details += f", Response: {response.text[:200]}"
+def create_test_image():
+    """Create a tiny in-memory JPEG for testing"""
+    img = Image.new('RGB', (10, 10), color='red')
+    img_bytes = io.BytesIO()
+    img.save(img_bytes, format='JPEG')
+    img_bytes.seek(0)
+    return img_bytes
 
-            self.log_test(name, success, details)
-            
-            if success:
-                try:
-                    return response.json()
-                except:
-                    return {}
-            return None
 
-        except Exception as e:
-            self.log_test(name, False, f"Exception: {str(e)}")
-            return None
+def test_admin_login():
+    """Test A: Admin login"""
+    global admin_token
+    print("\n=== Test: Admin Login ===")
+    
+    response = requests.post(
+        f"{BASE_URL}/auth/login",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+    )
+    
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
+    
+    assert response.status_code == 200, f"Admin login failed: {response.text}"
+    data = response.json()
+    assert "access_token" in data, "No access token in response"
+    
+    admin_token = data["access_token"]
+    print(f"✅ Admin login successful, token: {admin_token[:20]}...")
+    return True
 
-    def test_authentication(self):
-        """Test authentication endpoints"""
-        print("\n🔐 Testing Authentication...")
-        
-        # Test login with demo credentials
-        login_data = {
-            "email": "admin@fleetOS.com",
-            "password": "password123"
-        }
-        
-        response = self.run_test(
-            "Login with demo credentials",
-            "POST",
-            "auth/login",
-            200,
-            data=login_data
-        )
-        
-        if response and 'access_token' in response:
-            self.token = response['access_token']
-            self.log_test("Token extraction", True)
-            
-            # Test get current user
-            user_response = self.run_test(
-                "Get current user",
-                "GET", 
-                "auth/me",
-                200
-            )
-            
-            if user_response:
-                self.log_test("User data validation", 'email' in user_response and 'name' in user_response)
-        else:
-            self.log_test("Token extraction", False, "No access_token in response")
 
-    def test_dashboard_stats(self):
-        """Test dashboard statistics"""
-        print("\n📊 Testing Dashboard...")
-        
-        stats = self.run_test(
-            "Get dashboard stats",
-            "GET",
-            "dashboard/stats", 
-            200
-        )
-        
-        if stats:
-            required_fields = ['total_vehicles', 'available_vehicles', 'total_drivers', 
-                             'available_drivers', 'active_duties', 'pending_invoices', 'total_revenue']
-            
-            all_fields_present = all(field in stats for field in required_fields)
-            self.log_test("Dashboard stats structure", all_fields_present, 
-                         f"Missing fields: {[f for f in required_fields if f not in stats]}")
-
-    def test_vehicles_crud(self):
-        """Test vehicle CRUD operations"""
-        print("\n🚗 Testing Vehicle Management...")
-        
-        # Get vehicles
-        vehicles = self.run_test(
-            "Get all vehicles",
-            "GET",
-            "vehicles",
-            200
-        )
-        
-        # Create a test vehicle
-        vehicle_data = {
-            "registration_number": f"TEST-{datetime.now().strftime('%H%M%S')}",
-            "vehicle_type": "SEDAN",
-            "model": "Test Model",
-            "manufacturer": "Test Manufacturer", 
-            "year": 2023,
-            "capacity": 4
-        }
-        
-        created_vehicle = self.run_test(
-            "Create vehicle",
-            "POST",
-            "vehicles",
-            200,
-            data=vehicle_data
-        )
-        
-        if created_vehicle and 'id' in created_vehicle:
-            vehicle_id = created_vehicle['id']
-            
-            # Get specific vehicle
-            self.run_test(
-                "Get specific vehicle",
-                "GET",
-                f"vehicles/{vehicle_id}",
-                200
-            )
-            
-            # Update vehicle
-            update_data = vehicle_data.copy()
-            update_data['model'] = 'Updated Model'
-            
-            self.run_test(
-                "Update vehicle",
-                "PUT",
-                f"vehicles/{vehicle_id}",
-                200,
-                data=update_data
-            )
-
-    def test_drivers_crud(self):
-        """Test driver CRUD operations"""
-        print("\n👨‍💼 Testing Driver Management...")
-        
-        # Get drivers
-        self.run_test(
-            "Get all drivers",
-            "GET",
-            "drivers",
-            200
-        )
-        
-        # Create a test driver
-        driver_data = {
-            "name": f"Test Driver {datetime.now().strftime('%H%M%S')}",
-            "email": f"testdriver{datetime.now().strftime('%H%M%S')}@test.com",
-            "phone": "+91-9876543210",
-            "license_number": f"DL{datetime.now().strftime('%H%M%S')}"
-        }
-        
-        created_driver = self.run_test(
-            "Create driver",
-            "POST",
-            "drivers",
-            200,
-            data=driver_data
-        )
-        
-        if created_driver and 'id' in created_driver:
-            driver_id = created_driver['id']
-            
-            # Get specific driver
-            self.run_test(
-                "Get specific driver",
-                "GET",
-                f"drivers/{driver_id}",
-                200
-            )
-
-    def test_clients_crud(self):
-        """Test client CRUD operations"""
-        print("\n🏢 Testing Client Management...")
-        
-        # Get clients
-        self.run_test(
-            "Get all clients",
-            "GET",
-            "clients",
-            200
-        )
-        
-        # Create a test client
-        client_data = {
-            "company_name": f"Test Company {datetime.now().strftime('%H%M%S')}",
-            "contact_person": "Test Contact",
-            "email": f"testclient{datetime.now().strftime('%H%M%S')}@test.com",
-            "phone": "+91-9876543210",
+def test_create_client():
+    """Test B: Create a client"""
+    global client_id
+    print("\n=== Test: Create Client ===")
+    
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    response = requests.post(
+        f"{BASE_URL}/clients",
+        headers=headers,
+        json={
+            "company_name": "TestCorp",
+            "contact_person": "T",
+            "email": "t@t.com",
+            "phone": "+911111111111",
             "gstin": "22AAAAA0000A1Z5"
         }
-        
-        created_client = self.run_test(
-            "Create client",
-            "POST",
-            "clients",
-            200,
-            data=client_data
-        )
-        
-        return created_client
+    )
+    
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
+    
+    assert response.status_code == 200, f"Client creation failed: {response.text}"
+    data = response.json()
+    assert "id" in data, "No client ID in response"
+    
+    client_id = data["id"]
+    print(f"✅ Client created with ID: {client_id}")
+    return True
 
-    def test_duty_lifecycle(self):
-        """Test the CRITICAL duty lifecycle management"""
-        print("\n📋 Testing Duty Lifecycle (CRITICAL)...")
-        
-        # First get existing data
-        clients = self.run_test("Get clients for duty", "GET", "clients", 200)
-        vehicles = self.run_test("Get vehicles for duty", "GET", "vehicles", 200) 
-        drivers = self.run_test("Get drivers for duty", "GET", "drivers", 200)
-        
-        if not clients or not vehicles or not drivers:
-            self.log_test("Duty lifecycle prerequisites", False, "Missing clients, vehicles, or drivers")
-            return
-        
-        # Find available vehicle and driver
-        available_vehicle = next((v for v in vehicles if v.get('status') == 'AVAILABLE'), None)
-        available_driver = next((d for d in drivers if d.get('status') == 'AVAILABLE'), None)
-        
-        if not available_vehicle or not available_driver:
-            self.log_test("Available resources check", False, "No available vehicle or driver found")
-            return
-        
-        # Create a duty
-        pickup_time = (datetime.now() + timedelta(hours=2)).isoformat()
-        duty_data = {
-            "client_id": clients[0]['id'],
-            "pickup_location": "Test Pickup Location",
-            "dropoff_location": "Test Dropoff Location", 
+
+def test_create_vehicle():
+    """Test C: Create a vehicle"""
+    global vehicle_id
+    print("\n=== Test: Create Vehicle ===")
+    
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    response = requests.post(
+        f"{BASE_URL}/vehicles",
+        headers=headers,
+        json={
+            "registration_number": "TS01AB1234",
+            "vehicle_type": "SEDAN"
+        }
+    )
+    
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
+    
+    assert response.status_code == 200, f"Vehicle creation failed: {response.text}"
+    data = response.json()
+    assert "id" in data, "No vehicle ID in response"
+    
+    vehicle_id = data["id"]
+    print(f"✅ Vehicle created with ID: {vehicle_id}")
+    return True
+
+
+def test_create_driver():
+    """Test D: Create a driver"""
+    global driver_id
+    print("\n=== Test: Create Driver ===")
+    
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    response = requests.post(
+        f"{BASE_URL}/drivers",
+        headers=headers,
+        json={
+            "name": "Test Driver",
+            "phone": DRIVER_PHONE,
+            "license_number": "LIC123"
+        }
+    )
+    
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
+    
+    assert response.status_code == 200, f"Driver creation failed: {response.text}"
+    data = response.json()
+    assert "id" in data, "No driver ID in response"
+    
+    driver_id = data["id"]
+    print(f"✅ Driver created with ID: {driver_id}")
+    return True
+
+
+def test_create_trip():
+    """Test E: Create a trip/duty"""
+    global trip_id
+    print("\n=== Test: Create Trip ===")
+    
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    pickup_time = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    
+    response = requests.post(
+        f"{BASE_URL}/duties",
+        headers=headers,
+        json={
+            "client_id": client_id,
+            "pickup_location": "Connaught Place, New Delhi",
+            "dropoff_location": "India Gate, New Delhi",
             "pickup_time": pickup_time,
-            "passenger_name": "Test Passenger",
-            "passenger_phone": "+91-9876543210",
-            "notes": "Test duty for lifecycle testing"
+            "passenger_name": "John Doe",
+            "passenger_phone": "+919876543210",
+            "trip_type": "ONE_WAY"
         }
-        
-        created_duty = self.run_test(
-            "Create duty (CREATED status)",
-            "POST",
-            "duties",
-            200,
-            data=duty_data
-        )
-        
-        if not created_duty or 'id' not in created_duty:
-            self.log_test("Duty creation failed", False, "Cannot proceed with lifecycle testing")
-            return
-            
-        duty_id = created_duty['id']
-        
-        # Test duty assignment (CREATED → ASSIGNED)
-        assign_data = {
-            "vehicle_id": available_vehicle['id'],
-            "driver_id": available_driver['id']
+    )
+    
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
+    
+    assert response.status_code == 200, f"Trip creation failed: {response.text}"
+    data = response.json()
+    assert "id" in data, "No trip ID in response"
+    
+    trip_id = data["id"]
+    print(f"✅ Trip created with ID: {trip_id}")
+    return True
+
+
+def test_assign_trip():
+    """Test F: Assign driver and vehicle to trip"""
+    print("\n=== Test: Assign Trip ===")
+    
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    response = requests.patch(
+        f"{BASE_URL}/duties/{trip_id}/assign",
+        headers=headers,
+        json={
+            "driver_id": driver_id,
+            "vehicle_id": vehicle_id
         }
-        
-        self.run_test(
-            "Assign duty (CREATED → ASSIGNED)",
-            "POST",
-            f"duties/{duty_id}/assign",
-            200,
-            data=assign_data
-        )
-        
-        # Test status transitions
-        status_transitions = [
-            ("ASSIGNED → ACCEPTED", "ACCEPTED"),
-            ("ACCEPTED → STARTED", "STARTED"), 
-            ("STARTED → COMPLETED", "COMPLETED")
-        ]
-        
-        for transition_name, new_status in status_transitions:
-            self.run_test(
-                f"Update duty status ({transition_name})",
-                "PATCH",
-                f"duties/{duty_id}/status",
-                200,
-                data={"status": new_status}
-            )
-        
-        # Get updated duty to verify final status
-        final_duty = self.run_test(
-            "Get duty after completion",
-            "GET",
-            f"duties/{duty_id}",
-            200
-        )
-        
-        if final_duty:
-            self.log_test("Duty status verification", final_duty.get('status') == 'COMPLETED')
-
-    def test_billing_system(self):
-        """Test billing and invoice generation"""
-        print("\n💰 Testing Billing System...")
-        
-        # Get invoices
-        self.run_test(
-            "Get all invoices",
-            "GET",
-            "invoices",
-            200
-        )
-        
-        # Get completed duties for billing
-        duties = self.run_test("Get duties for billing", "GET", "duties", 200)
-        clients = self.run_test("Get clients for billing", "GET", "clients", 200)
-        
-        if duties and clients:
-            completed_duties = [d for d in duties if d.get('status') == 'COMPLETED']
-            
-            if completed_duties and clients:
-                # Create an invoice
-                invoice_data = {
-                    "client_id": clients[0]['id'],
-                    "duties": [completed_duties[0]['id']] if completed_duties else [],
-                    "amount": 1000.0,
-                    "gst_percentage": 18.0,
-                    "due_days": 30
-                }
-                
-                if invoice_data["duties"]:
-                    self.run_test(
-                        "Generate invoice",
-                        "POST",
-                        "invoices",
-                        200,
-                        data=invoice_data
-                    )
-                else:
-                    self.log_test("Invoice generation", False, "No completed duties available for billing")
-
-    def run_all_tests(self):
-        """Run all API tests"""
-        print("🚀 Starting Fleet OS API Testing...")
-        print(f"Testing against: {self.base_url}")
-        
-        # Run tests in order
-        self.test_authentication()
-        
-        if not self.token:
-            print("❌ Authentication failed - stopping tests")
-            return False
-            
-        self.test_dashboard_stats()
-        self.test_vehicles_crud()
-        self.test_drivers_crud() 
-        self.test_clients_crud()
-        self.test_duty_lifecycle()  # CRITICAL
-        self.test_billing_system()
-        
-        # Print summary
-        print(f"\n📊 Test Summary:")
-        print(f"Tests run: {self.tests_run}")
-        print(f"Tests passed: {self.tests_passed}")
-        print(f"Success rate: {(self.tests_passed/self.tests_run*100):.1f}%")
-        
-        return self.tests_passed == self.tests_run
-
-def main():
-    tester = FleetOSAPITester()
-    success = tester.run_all_tests()
+    )
     
-    # Save detailed results
-    with open('/app/backend_test_results.json', 'w') as f:
-        json.dump({
-            'summary': {
-                'tests_run': tester.tests_run,
-                'tests_passed': tester.tests_passed,
-                'success_rate': (tester.tests_passed/tester.tests_run*100) if tester.tests_run > 0 else 0
-            },
-            'results': tester.test_results
-        }, f, indent=2)
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
     
-    return 0 if success else 1
+    assert response.status_code == 200, f"Trip assignment failed: {response.text}"
+    
+    # Verify trip is ASSIGNED
+    response = requests.get(
+        f"{BASE_URL}/duties/{trip_id}",
+        headers=headers
+    )
+    data = response.json()
+    assert data["status"] == "ASSIGNED", f"Trip status is {data['status']}, expected ASSIGNED"
+    
+    print(f"✅ Trip assigned successfully, status: {data['status']}")
+    return True
+
+
+def test_driver_otp_login():
+    """Test G: Driver OTP login"""
+    global driver_token
+    print("\n=== Test: Driver OTP Login ===")
+    
+    # Send OTP
+    print("Sending OTP...")
+    response = requests.post(
+        f"{BASE_URL}/driver/auth/send-otp",
+        json={"phone": DRIVER_PHONE}
+    )
+    
+    print(f"Send OTP Status: {response.status_code}")
+    print(f"Send OTP Response: {response.text}")
+    
+    assert response.status_code == 200, f"Send OTP failed: {response.text}"
+    
+    # Verify OTP
+    print("Verifying OTP...")
+    response = requests.post(
+        f"{BASE_URL}/driver/auth/verify-otp",
+        json={"phone": DRIVER_PHONE, "otp": DEV_OTP}
+    )
+    
+    print(f"Verify OTP Status: {response.status_code}")
+    print(f"Verify OTP Response: {response.text}")
+    
+    assert response.status_code == 200, f"Verify OTP failed: {response.text}"
+    data = response.json()
+    assert "access_token" in data, "No access token in response"
+    
+    driver_token = data["access_token"]
+    print(f"✅ Driver login successful, token: {driver_token[:20]}...")
+    return True
+
+
+def test_driver_accept_trip():
+    """Test H: Driver accepts trip"""
+    print("\n=== Test: Driver Accept Trip ===")
+    
+    headers = {"Authorization": f"Bearer {driver_token}"}
+    response = requests.patch(
+        f"{BASE_URL}/driver/trips/{trip_id}/accept",
+        headers=headers
+    )
+    
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
+    
+    assert response.status_code == 200, f"Accept trip failed: {response.text}"
+    
+    # Verify trip is ACCEPTED
+    response = requests.get(
+        f"{BASE_URL}/driver/trips/{trip_id}",
+        headers=headers
+    )
+    data = response.json()
+    assert data["trip"]["status"] == "ACCEPTED", f"Trip status is {data['trip']['status']}, expected ACCEPTED"
+    
+    print(f"✅ Trip accepted successfully, status: {data['trip']['status']}")
+    return True
+
+
+def test_trip_start_with_location():
+    """Test A — Trip Start: timestamp + location stamp"""
+    print("\n=== Test A: Trip Start with Timestamp + Location Stamp ===")
+    
+    headers = {"Authorization": f"Bearer {driver_token}"}
+    response = requests.post(
+        f"{BASE_URL}/driver/trips/{trip_id}/start",
+        headers=headers,
+        json={
+            "opening_km": 12345.0,
+            "driver_remarks": "Starting",
+            "latitude": 28.6139,
+            "longitude": 77.2090,
+            "address": "Connaught Place, New Delhi"
+        }
+    )
+    
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
+    
+    assert response.status_code == 200, f"Trip start failed: {response.text}"
+    
+    # Verify trip details
+    response = requests.get(
+        f"{BASE_URL}/driver/trips/{trip_id}",
+        headers=headers
+    )
+    
+    print(f"Get Trip Status: {response.status_code}")
+    print(f"Get Trip Response: {response.text}")
+    
+    assert response.status_code == 200, f"Get trip failed: {response.text}"
+    data = response.json()
+    
+    trip = data["trip"]
+    duty_slip = data["duty_slip"]
+    
+    # Assertions
+    assert trip["status"] == "STARTED", f"Trip status is {trip['status']}, expected STARTED"
+    assert trip["started_at"] is not None, "Trip started_at is null"
+    assert trip["start_location"] is not None, "Trip start_location is null"
+    assert trip["start_location"]["latitude"] == 28.6139, f"Latitude mismatch: {trip['start_location']['latitude']}"
+    assert trip["start_location"]["longitude"] == 77.2090, f"Longitude mismatch: {trip['start_location']['longitude']}"
+    assert trip["start_location"]["address"] == "Connaught Place, New Delhi", f"Address mismatch: {trip['start_location']['address']}"
+    
+    assert duty_slip["started_at"] is not None, "Duty slip started_at is null"
+    assert duty_slip["start_location"] is not None, "Duty slip start_location is null"
+    assert duty_slip["start_location"]["latitude"] == 28.6139, f"Duty slip latitude mismatch: {duty_slip['start_location']['latitude']}"
+    
+    print("✅ Test A PASSED: Trip start with timestamp + location stamp working correctly")
+    return True
+
+
+def test_upload_start_photo():
+    """Test B — Upload start photo (multipart)"""
+    print("\n=== Test B: Upload Start Photo ===")
+    
+    headers = {"Authorization": f"Bearer {driver_token}"}
+    
+    # Create test image
+    img_bytes = create_test_image()
+    
+    files = {
+        'photo': ('test_start.jpg', img_bytes, 'image/jpeg')
+    }
+    data = {
+        'photo_type': 'start'
+    }
+    
+    response = requests.post(
+        f"{BASE_URL}/driver/trips/{trip_id}/upload-photo",
+        headers=headers,
+        files=files,
+        data=data
+    )
+    
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
+    
+    assert response.status_code == 200, f"Upload start photo failed: {response.text}"
+    
+    result = response.json()
+    assert "photo_url" in result, "No photo_url in response"
+    assert result["photo_type"] == "start", f"Photo type mismatch: {result['photo_type']}"
+    assert result["photo_url"].startswith("/api/uploads/duty_photos/"), f"Invalid photo URL: {result['photo_url']}"
+    
+    photo_url = result["photo_url"]
+    
+    # Verify photo is accessible
+    full_url = f"https://duty-slip-flow.preview.emergentagent.com{photo_url}"
+    photo_response = requests.get(full_url)
+    
+    print(f"Photo fetch status: {photo_response.status_code}")
+    print(f"Photo content-type: {photo_response.headers.get('content-type')}")
+    
+    assert photo_response.status_code == 200, f"Photo not accessible: {photo_response.status_code}"
+    assert "image" in photo_response.headers.get('content-type', ''), "Invalid content type"
+    
+    # Verify duty slip has start_photo_url
+    trip_response = requests.get(
+        f"{BASE_URL}/driver/trips/{trip_id}",
+        headers=headers
+    )
+    trip_data = trip_response.json()
+    duty_slip = trip_data["duty_slip"]
+    
+    assert duty_slip["start_photo_url"] == photo_url, f"Duty slip start_photo_url mismatch: {duty_slip.get('start_photo_url')}"
+    
+    print(f"✅ Test B PASSED: Start photo uploaded and accessible at {photo_url}")
+    return True
+
+
+def test_upload_photo_validation():
+    """Test C — Validation on upload-photo"""
+    print("\n=== Test C: Upload Photo Validation ===")
+    
+    headers = {"Authorization": f"Bearer {driver_token}"}
+    
+    # Test 1: Invalid photo_type
+    print("Testing invalid photo_type...")
+    img_bytes = create_test_image()
+    files = {'photo': ('test.jpg', img_bytes, 'image/jpeg')}
+    data = {'photo_type': 'middle'}
+    
+    response = requests.post(
+        f"{BASE_URL}/driver/trips/{trip_id}/upload-photo",
+        headers=headers,
+        files=files,
+        data=data
+    )
+    
+    print(f"Invalid photo_type status: {response.status_code}")
+    print(f"Invalid photo_type response: {response.text}")
+    
+    assert response.status_code == 400, f"Expected 400 for invalid photo_type, got {response.status_code}"
+    
+    # Test 2: Invalid file type
+    print("Testing invalid file type...")
+    text_file = io.BytesIO(b"This is not an image")
+    files = {'photo': ('test.txt', text_file, 'text/plain')}
+    data = {'photo_type': 'start'}
+    
+    response = requests.post(
+        f"{BASE_URL}/driver/trips/{trip_id}/upload-photo",
+        headers=headers,
+        files=files,
+        data=data
+    )
+    
+    print(f"Invalid file type status: {response.status_code}")
+    print(f"Invalid file type response: {response.text}")
+    
+    assert response.status_code == 400, f"Expected 400 for invalid file type, got {response.status_code}"
+    
+    print("✅ Test C PASSED: Photo upload validation working correctly")
+    return True
+
+
+def test_trip_complete_with_location():
+    """Test D — Trip Complete: timestamp + end location + traveller + signature"""
+    print("\n=== Test D: Trip Complete with Timestamp + Location + Traveller + Signature ===")
+    
+    headers = {"Authorization": f"Bearer {driver_token}"}
+    
+    # Create a simple base64 signature (1x1 PNG)
+    signature_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    
+    response = requests.post(
+        f"{BASE_URL}/driver/trips/{trip_id}/complete",
+        headers=headers,
+        json={
+            "closing_km": 12365.5,
+            "traveller_name": "John Doe",
+            "passenger_signature": signature_base64,
+            "driver_remarks": "Trip complete",
+            "latitude": 28.6304,
+            "longitude": 77.2177,
+            "address": "India Gate, New Delhi"
+        }
+    )
+    
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
+    
+    assert response.status_code == 200, f"Trip complete failed: {response.text}"
+    
+    result = response.json()
+    assert result["total_km"] == 20.5, f"Total KM mismatch: {result['total_km']}, expected 20.5"
+    
+    # Verify trip details (trip might be in history now)
+    response = requests.get(
+        f"{BASE_URL}/driver/trips/{trip_id}",
+        headers=headers
+    )
+    
+    print(f"Get Trip Status: {response.status_code}")
+    print(f"Get Trip Response: {response.text}")
+    
+    assert response.status_code == 200, f"Get trip failed: {response.text}"
+    data = response.json()
+    
+    trip = data["trip"]
+    duty_slip = data["duty_slip"]
+    
+    # Assertions
+    assert trip["status"] == "COMPLETED", f"Trip status is {trip['status']}, expected COMPLETED"
+    assert trip["completed_at"] is not None, "Trip completed_at is null"
+    assert trip["end_location"] is not None, "Trip end_location is null"
+    assert trip["end_location"]["address"] == "India Gate, New Delhi", f"End address mismatch: {trip['end_location']['address']}"
+    
+    assert duty_slip["status"] == "SIGNED", f"Duty slip status is {duty_slip['status']}, expected SIGNED"
+    assert duty_slip["completed_at"] is not None, "Duty slip completed_at is null"
+    assert duty_slip["end_location"] is not None, "Duty slip end_location is null"
+    assert duty_slip["end_location"]["address"] == "India Gate, New Delhi", f"Duty slip end address mismatch: {duty_slip['end_location']['address']}"
+    assert duty_slip["traveller_name"] == "John Doe", f"Traveller name mismatch: {duty_slip['traveller_name']}"
+    assert duty_slip["passenger_signature"] is not None, "Passenger signature is null"
+    assert duty_slip["total_km"] == 20.5, f"Duty slip total_km mismatch: {duty_slip['total_km']}"
+    
+    print("✅ Test D PASSED: Trip complete with timestamp + location + traveller + signature working correctly")
+    return True
+
+
+def test_upload_end_photo():
+    """Test E — Upload end photo"""
+    print("\n=== Test E: Upload End Photo ===")
+    
+    headers = {"Authorization": f"Bearer {driver_token}"}
+    
+    # Create test image
+    img_bytes = create_test_image()
+    
+    files = {
+        'photo': ('test_end.jpg', img_bytes, 'image/jpeg')
+    }
+    data = {
+        'photo_type': 'end'
+    }
+    
+    response = requests.post(
+        f"{BASE_URL}/driver/trips/{trip_id}/upload-photo",
+        headers=headers,
+        files=files,
+        data=data
+    )
+    
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
+    
+    assert response.status_code == 200, f"Upload end photo failed: {response.text}"
+    
+    result = response.json()
+    assert "photo_url" in result, "No photo_url in response"
+    assert result["photo_type"] == "end", f"Photo type mismatch: {result['photo_type']}"
+    
+    photo_url = result["photo_url"]
+    
+    # Verify duty slip has end_photo_url
+    trip_response = requests.get(
+        f"{BASE_URL}/driver/trips/{trip_id}",
+        headers=headers
+    )
+    trip_data = trip_response.json()
+    duty_slip = trip_data["duty_slip"]
+    
+    assert duty_slip["end_photo_url"] == photo_url, f"Duty slip end_photo_url mismatch: {duty_slip.get('end_photo_url')}"
+    
+    print(f"✅ Test E PASSED: End photo uploaded and linked to duty slip at {photo_url}")
+    return True
+
+
+def test_auth_guard():
+    """Test F — Auth guard"""
+    print("\n=== Test F: Auth Guard ===")
+    
+    # Try to upload photo without JWT
+    img_bytes = create_test_image()
+    files = {'photo': ('test.jpg', img_bytes, 'image/jpeg')}
+    data = {'photo_type': 'start'}
+    
+    response = requests.post(
+        f"{BASE_URL}/driver/trips/{trip_id}/upload-photo",
+        files=files,
+        data=data
+    )
+    
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
+    
+    assert response.status_code in [401, 403], f"Expected 401 or 403 without JWT, got {response.status_code}"
+    
+    print("✅ Test F PASSED: Auth guard working correctly")
+    return True
+
+
+def run_all_tests():
+    """Run all tests in sequence"""
+    print("=" * 80)
+    print("BACKEND TEST SUITE - FOUNDER-REQUESTED DRIVER APP FEATURES")
+    print("=" * 80)
+    
+    tests = [
+        ("Admin Login", test_admin_login),
+        ("Create Client", test_create_client),
+        ("Create Vehicle", test_create_vehicle),
+        ("Create Driver", test_create_driver),
+        ("Create Trip", test_create_trip),
+        ("Assign Trip", test_assign_trip),
+        ("Driver OTP Login", test_driver_otp_login),
+        ("Driver Accept Trip", test_driver_accept_trip),
+        ("Test A: Trip Start with Location", test_trip_start_with_location),
+        ("Test B: Upload Start Photo", test_upload_start_photo),
+        ("Test C: Upload Photo Validation", test_upload_photo_validation),
+        ("Test D: Trip Complete with Location", test_trip_complete_with_location),
+        ("Test E: Upload End Photo", test_upload_end_photo),
+        ("Test F: Auth Guard", test_auth_guard),
+    ]
+    
+    passed = 0
+    failed = 0
+    errors = []
+    
+    for test_name, test_func in tests:
+        try:
+            if test_func():
+                passed += 1
+        except AssertionError as e:
+            failed += 1
+            error_msg = f"{test_name}: {str(e)}"
+            errors.append(error_msg)
+            print(f"❌ {test_name} FAILED: {e}")
+        except Exception as e:
+            failed += 1
+            error_msg = f"{test_name}: Unexpected error - {str(e)}"
+            errors.append(error_msg)
+            print(f"❌ {test_name} ERROR: {e}")
+    
+    print("\n" + "=" * 80)
+    print("TEST SUMMARY")
+    print("=" * 80)
+    print(f"Total Tests: {len(tests)}")
+    print(f"Passed: {passed}")
+    print(f"Failed: {failed}")
+    
+    if errors:
+        print("\nFailed Tests:")
+        for error in errors:
+            print(f"  - {error}")
+    
+    print("=" * 80)
+    
+    return failed == 0
+
 
 if __name__ == "__main__":
-    sys.exit(main())
+    success = run_all_tests()
+    exit(0 if success else 1)

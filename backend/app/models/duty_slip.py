@@ -46,6 +46,18 @@ class DutySlip(BaseModel):
     passenger_signature: Optional[str] = None
     signed_at: Optional[datetime] = None
     signed_by: Optional[str] = None
+
+    # Founder-requested feature: precise timestamps
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+    # Founder-requested feature: location stamps (lat/lng/address)
+    start_location: Optional[dict] = None  # {latitude, longitude, address, timestamp}
+    end_location: Optional[dict] = None
+
+    # Founder-requested feature: camera capture photos (URLs)
+    start_photo_url: Optional[str] = None
+    end_photo_url: Optional[str] = None
     
     note: str = "Additional charges (Toll, Parking, Taxes, GST) will be added in final invoice"
     

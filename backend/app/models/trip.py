@@ -6,6 +6,14 @@ import uuid
 from .enums import TripStatus, TripType
 
 
+class GeoStamp(BaseModel):
+    """Location stamp with GPS coordinates and human-readable address"""
+    latitude: float
+    longitude: float
+    address: Optional[str] = None
+    timestamp: Optional[datetime] = None
+
+
 class Trip(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -25,6 +33,12 @@ class Trip(BaseModel):
     passengers: List[str] = []
     notes: Optional[str] = None
     duty_slip_id: Optional[str] = None
+    # Founder-requested feature: precise timestamps for trip lifecycle
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    # Founder-requested feature: location stamp at start/end
+    start_location: Optional[GeoStamp] = None
+    end_location: Optional[GeoStamp] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -72,3 +86,7 @@ class TripActionRequest(BaseModel):
     driver_remarks: Optional[str] = None
     passenger_signature: Optional[str] = None
     traveller_name: Optional[str] = None
+    # Founder-requested features: location stamp on start/complete
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    address: Optional[str] = None

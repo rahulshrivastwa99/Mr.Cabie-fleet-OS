@@ -32,7 +32,7 @@ Output: `build/app/outputs/bundle/release/app-release.aab`
 
 ## Important: Update API URL Before Building
 The app connects to your backend. Update the API_BASE_URL when building:
-- Preview: https://fleet-os-preview-1.preview.emergentagent.com/api
+- Preview: https://duty-slip-flow.preview.emergentagent.com/api
 - Production: Update to your deployed domain after clicking "Deploy" in Emergent
 
 ## Signing Configuration

@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import '../config/theme.dart';
 import '../models/trip.dart';
 import '../providers/trip_provider.dart';
-import 'active_trip_screen.dart';
+import 'start_trip_screen.dart';
 
 class TripDetailScreen extends StatefulWidget {
   final String tripId;
@@ -82,35 +82,17 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   }
 
   Future<void> _handleStart() async {
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => _StartTripDialog(),
+    if (_trip == null) return;
+    // Push the full Start Trip flow (opening KM + location + photo).
+    // The screen navigates to ActiveTripScreen on success itself.
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StartTripScreen(trip: _trip!),
+      ),
     );
-
-    if (result == null) return;
-
-    final tripProvider = context.read<TripProvider>();
-    final success = await tripProvider.startTrip(
-      widget.tripId,
-      result['opening_km'],
-      remarks: result['remarks'],
-    );
-    
-    if (success && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ActiveTripScreen(tripId: widget.tripId),
-        ),
-      );
-    } else if (tripProvider.error != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(tripProvider.error!),
-          backgroundColor: AppTheme.error,
-        ),
-      );
-    }
+    // In case user came back without starting, refresh
+    if (mounted) _loadTrip();
   }
 
   @override
@@ -474,83 +456,3 @@ class _RejectDialogState extends State<_RejectDialog> {
   }
 }
 
-class _StartTripDialog extends StatefulWidget {
-  @override
-  State<_StartTripDialog> createState() => _StartTripDialogState();
-}
-
-class _StartTripDialogState extends State<_StartTripDialog> {
-  final _kmController = TextEditingController();
-  final _remarksController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-
-  @override
-  void dispose() {
-    _kmController.dispose();
-    _remarksController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Start Trip'),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(0)),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Enter the current odometer reading:'),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _kmController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'OPENING KM',
-                hintText: 'e.g., 45230',
-                suffixText: 'KM',
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter opening KM';
-                }
-                if (double.tryParse(value) == null) {
-                  return 'Please enter a valid number';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _remarksController,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'REMARKS (OPTIONAL)',
-                hintText: 'Any initial remarks',
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            if (_formKey.currentState!.validate()) {
-              Navigator.pop(context, {
-                'opening_km': double.parse(_kmController.text),
-                'remarks': _remarksController.text.isEmpty ? null : _remarksController.text,
-              });
-            }
-          },
-          style: ElevatedButton.styleFrom(backgroundColor: AppTheme.success),
-          child: const Text('Start Trip'),
-        ),
-      ],
-    );
-  }
-}

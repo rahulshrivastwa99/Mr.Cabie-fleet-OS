@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/trip.dart';
 import 'api_service.dart';
@@ -17,6 +20,14 @@ class TripService {
 
   static Future<Trip> getTripDetail(String tripId) async {
     final response = await ApiService.get(ApiConfig.tripDetail(tripId));
+    // Backend returns { trip: {...}, duty_slip: {...} }
+    if (response['trip'] is Map) {
+      final tripMap = Map<String, dynamic>.from(response['trip']);
+      if (response['duty_slip'] is Map) {
+        tripMap['duty_slip'] = response['duty_slip'];
+      }
+      return Trip.fromJson(tripMap);
+    }
     return Trip.fromJson(response);
   }
 
@@ -30,27 +41,89 @@ class TripService {
     });
   }
 
-  static Future<String> startTrip(String tripId, {
+  static Future<String> startTrip(
+    String tripId, {
     required double openingKm,
     String? driverRemarks,
+    double? latitude,
+    double? longitude,
+    String? address,
   }) async {
     final response = await ApiService.post(ApiConfig.startTrip(tripId), {
       'opening_km': openingKm,
       if (driverRemarks != null) 'driver_remarks': driverRemarks,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (address != null) 'address': address,
     });
     return response['duty_slip_id'] ?? '';
   }
 
-  static Future<double> completeTrip(String tripId, {
+  static Future<double> completeTrip(
+    String tripId, {
     required double closingKm,
     required String passengerSignature,
+    required String travellerName,
     String? driverRemarks,
+    double? latitude,
+    double? longitude,
+    String? address,
   }) async {
     final response = await ApiService.post(ApiConfig.completeTrip(tripId), {
       'closing_km': closingKm,
       'passenger_signature': passengerSignature,
+      'traveller_name': travellerName,
       if (driverRemarks != null) 'driver_remarks': driverRemarks,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (address != null) 'address': address,
     });
-    return response['total_km']?.toDouble() ?? 0.0;
+    return (response['total_km'] as num?)?.toDouble() ?? 0.0;
+  }
+
+  /// Uploads a photo captured on trip start or completion.
+  /// [photoType] must be "start" or "end".
+  /// Returns the server-side photo URL.
+  static Future<String> uploadTripPhoto(
+    String tripId,
+    File photoFile, {
+    required String photoType,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}${ApiConfig.uploadTripPhoto(tripId)}');
+    final request = http.MultipartRequest('POST', uri);
+
+    // Attach JWT
+    final token = ApiService.token;
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+
+    // Form field
+    request.fields['photo_type'] = photoType;
+
+    // File
+    request.files.add(await http.MultipartFile.fromPath(
+      'photo',
+      photoFile.path,
+    ));
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+
+    Map<String, dynamic> body;
+    try {
+      final decoded = jsonDecode(response.body);
+      body = decoded is Map<String, dynamic> ? decoded : {'detail': response.body};
+    } catch (_) {
+      body = {'detail': 'Server error (${response.statusCode})'};
+    }
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return (body['photo_url'] as String?) ?? '';
+    }
+    throw ApiException(
+      (body['detail'] ?? 'Failed to upload photo').toString(),
+      response.statusCode,
+    );
   }
 }

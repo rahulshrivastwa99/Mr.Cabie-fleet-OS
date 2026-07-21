@@ -23,6 +23,7 @@ class ApiConfig {
   static String rejectTrip(String tripId) => '/driver/trips/$tripId/reject';
   static String startTrip(String tripId) => '/driver/trips/$tripId/start';
   static String completeTrip(String tripId) => '/driver/trips/$tripId/complete';
+  static String uploadTripPhoto(String tripId) => '/driver/trips/$tripId/upload-photo';
   
   // Google Maps API Key (Placeholder)
   static const String googleMapsApiKey = 'YOUR_GOOGLE_MAPS_API_KEY_HERE';

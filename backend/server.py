@@ -13,7 +13,9 @@ To use this refactored version, rename this file to server.py
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+from pathlib import Path
 import os
 from dotenv import load_dotenv
 
@@ -75,6 +77,11 @@ app.add_middleware(
 
 # Mount API router
 app.include_router(api_router, prefix="/api")
+
+# Ensure uploads directory exists and expose under /api/uploads so K8s ingress routes it to backend
+UPLOAD_DIR = Path("/app/backend/uploads")
+(UPLOAD_DIR / "duty_photos").mkdir(parents=True, exist_ok=True)
+app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 
 @app.get("/")
