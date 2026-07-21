@@ -107,3 +107,15 @@ When all features are completed and ready for the founder:
 2. **Output Location**:
    `driver_app/build/app/outputs/flutter-apk/app-release.apk`
 3. **Share APK**: Upload the generated `app-release.apk` to Google Drive or Firebase App Distribution for the founder and drivers to install!
+
+
+
+####new feature 
+
+Live Duty Slip Preview: Add an in-app printable preview of the signed duty slip with photos, timestamps and route map, so drivers and travellers can review before submitting
+
+Offline Trip Sync: Let drivers start and complete trips without signal and auto-sync photos and location stamps the moment they reconnect
+
+Admin Trip Map: Show a live map on the admin portal with driver GPS pings, start/end stamps and photo thumbnails from each duty slip
+
+Auto-Trip Creation: Turn approved corporate bookings into assigned trips automatically so admins do not double-enter data
