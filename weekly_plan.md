@@ -28,16 +28,37 @@ Deploy the full system (Backend + Frontend + APK distribution) to production.
 
 ---
 
-## ✅ Current Status (as of July 20, 2026)
+## ✅ Current Status (as of July 27, 2026)
 
 | Component | Status | % Done |
 |-----------|--------|--------|
-| Backend API (FastAPI) | ✅ Running | 85% |
-| Admin Web Portal | ✅ Complete | 100% |
+| Backend API (FastAPI) | ✅ Feature complete for Driver App + hardening | 95% |
+| Admin Web Portal | ✅ Complete (map/photo-thumb UI pending) | 90% |
 | Corporate Web Portal | ✅ Complete | 100% |
 | Driver Web Portal | ✅ Complete | 100% |
-| Flutter Driver App | ⚠️ Partial | 60% |
+| Flutter Driver App | ✅ Feature complete (needs device QA) | 90% |
 | Production Deployment | ⚠️ Partial | 50% |
+
+### Iteration 2 delivery — completed today
+- **Digital Signature & Duty Slip** completion flow (traveller name + signature) — ✅
+- **Timestamp feature** (`started_at`, `completed_at`) — ✅
+- **Location Stamp feature** (GPS + reverse-geocoded address on start/end) — ✅
+- **Camera Capture feature** + `/api/driver/trips/{id}/upload-photo` — ✅
+- **Live Duty Slip Preview** screen in Flutter — ✅
+- **Offline Trip Sync** (shared_preferences queue + connectivity_plus auto-flush) — ✅
+- **Auto-Trip Creation** on `PATCH /api/bookings/{id}/approve` — ✅
+- **Branding polish** (Mr. Cabie logo/colors/splash) — ✅
+- **Trip History + Profile/Settings** enhancements — ✅
+- **Security guardrails**: KM validation, 401 → auto-logout, permission-denied dialogs with "Open Settings", image compression, 3× photo-upload retry, double-submit protection — ✅
+- **Admin data endpoints**: `/api/duty-slips`, `/api/tracking/drivers`, `/api/tracking/driver/{id}/pings` — ✅
+
+### Backend test results
+- 22/22 tests passing (regression + iteration 2). See `/app/backend_test.py`.
+
+### Still remaining
+- Admin web portal UI: render `/api/tracking/drivers` on the Live Tracking map + duty-slip photo thumbnails on the Duty Slips page.
+- Flutter device QA — no simulator available in this container, needs an on-device run.
+- Production deployment / APK build & distribution (Week 4 in this plan).
 
 ---
 
