@@ -10,7 +10,7 @@ class Driver(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
-    email: str
+    email:  Optional[str] = None
     phone: str
     license_number: str
     status: DriverStatus = DriverStatus.AVAILABLE
@@ -21,7 +21,7 @@ class Driver(BaseModel):
 
 class DriverCreate(BaseModel):
     name: str
-    email: str
+    email: Optional[str] = None 
     phone: str
     license_number: str
 

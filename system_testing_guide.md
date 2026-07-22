@@ -1,18 +1,19 @@
-# 🧪 Mr. Cabie — Fleet OS: Complete System Testing & Operations Guide
+# 🧪 Mr. Cabie — Fleet OS: Complete System Testing & Operations Guide (Local Setup)
 
 > **Project:** Mr. Cabie B2B Fleet Management System
 > **Version:** 2.0.0
-> **Production Base URL:** `https://fleet-os-preview-1.emergent.host`
+> **Local Base URL (Frontend):** `http://localhost:3000`
+> **Local Base URL (Backend):** `http://localhost:8001`
 
 ---
 
-## 🔐 1. Portal Access Links & Credentials
+## 🔐 1. Portal Access Links & Credentials (Local Testing)
 
 | Portal | URL | Access Method / Credentials |
 |--------|-----|-----------------------------|
-| **Admin Portal** | `https://fleet-os-preview-1.emergent.host` | **Email:** `admin@fleetOS.com`<br>**Password:** `password123` |
-| **Corporate Portal** | `https://fleet-os-preview-1.emergent.host/corporate/login` | Created via Admin → Clients (Auto-generated email & password) |
-| **Driver Portal (Web)** | `https://fleet-os-preview-1.emergent.host/driver` | Phone Number + OTP (Twilio / Dev OTP `123456`) |
+| **Admin Portal** | `http://localhost:3000` | **Email:** `admin@fleetOS.com`<br>**Password:** `password123` |
+| **Corporate Portal** | `http://localhost:3000/corporate/login` | Created via Admin → Clients (Auto-generated email & password) |
+| **Driver Portal (Web)** | `http://localhost:3000/driver` | Phone Number + OTP (Twilio / Dev OTP `123456`) |
 
 ---
 
@@ -92,13 +93,13 @@
 ## 🧪 6. Testing Step-by-Step Checklist
 
 ### Test Phase A — Admin Setup & Corporate Creation
-1. Go to `https://fleet-os-preview-1.emergent.host` and login with `admin@fleetOS.com` / `password123`.
+1. Go to `http://localhost:3000` and login with `admin@fleetOS.com` / `password123`.
 2. Go to **Clients** → **Add Client**. Enter company details. Copy the auto-generated email & password from the popup modal.
 3. Go to **Drivers** → **Add Driver**. Enter driver name and 10-digit Indian phone number (e.g. `9876543210`).
 4. Go to **Fleet** → **Add Vehicle**. Enter registration number & vehicle type.
 
 ### Test Phase B — Corporate Booking
-1. Open Incognito window and go to `https://fleet-os-preview-1.emergent.host/corporate/login`.
+1. Open Incognito window and go to `http://localhost:3000/corporate/login`.
 2. Login with the corporate email & password generated in Test Phase A.
 3. Go to **Bookings** → **Create Booking**. Select employee, pickup location, drop location, and date/time.
 
@@ -130,8 +131,8 @@
 
 #### `backend/.env`
 ```env
-MONGO_URL="mongodb+srv://<user>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority"
-DB_NAME="fleet_os"
+MONGO_URL="mongodb+srv://CabieOpsAI:CabieOpsAI@cabieopsdata.decymbq.mongodb.net/?appName=CabieopsData"
+DB_NAME="test_database"
 JWT_SECRET_KEY="your-jwt-secret"
 CORS_ORIGINS="*"
 TWILIO_ACCOUNT_SID="your-twilio-sid"
@@ -141,17 +142,22 @@ TWILIO_PHONE_NUMBER="+1xxx"
 
 #### `frontend/.env`
 ```env
-REACT_APP_BACKEND_URL=https://fleet-os-preview-1.emergent.host
+REACT_APP_BACKEND_URL=http://localhost:8001
 REACT_APP_GOOGLE_MAPS_API_KEY=your-google-maps-key
 ```
 
 ### Running Locally
+
 ```bash
-# Terminal 1 — Backend
+# Terminal 1 — Backend API
 cd backend
 ./venv/Scripts/python.exe -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
-# Terminal 2 — Mobile App
+# Terminal 2 — React Web Portals (Admin/Corporate/Driver Web)
+cd frontend
+yarn start
+
+# Terminal 3 — Flutter Mobile Driver App (on device)
 cd driver_app
 flutter run --android-skip-build-dependency-validation
 ```

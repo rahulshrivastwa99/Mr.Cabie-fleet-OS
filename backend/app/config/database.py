@@ -1,14 +1,49 @@
 """Database configuration and connection"""
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import asyncio
 
-mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-db_name = os.environ.get('DB_NAME', 'fleet_os')
+class DatabaseProxy:
+    def __init__(self):
+        self._client = None
+        self._db = None
+        self._saved_loop = None
 
-client = AsyncIOMotorClient(mongo_url)
-db = client[db_name]
+    def _get_db(self):
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # Use connect=False to prevent connection hangs during construction
+            current_loop = None
 
-# Collections
+        # Recreate client if the event loop has changed or is closed
+        if self._client is not None:
+            if current_loop is not None and self._saved_loop != current_loop:
+                self._client = None
+                self._db = None
+            elif current_loop is not None and current_loop.is_closed():
+                self._client = None
+                self._db = None
+
+        if self._client is None:
+            mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+            db_name = os.environ.get('DB_NAME', 'fleet_os')
+            self._client = AsyncIOMotorClient(mongo_url, connect=False )
+            self._db = self._client[db_name]
+            self._saved_loop = current_loop
+            
+        return self._db
+
+    def __getattr__(self, name):
+        return getattr(self._get_db(), name)
+
+    def __getitem__(self, name):
+        return self._get_db()[name]
+
+
+db = DatabaseProxy()
+
+# Collections (These are maintained as properties/proxies for legacy code compatibility)
 users_collection = db.users
 drivers_collection = db.drivers
 vehicles_collection = db.vehicles
