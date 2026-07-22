@@ -102,3 +102,6 @@ driver_app/.flutter-plugins
 driver_app/.flutter-plugins-dependencies
 .gradle/
 local.properties
+
+
+system_testing_guide.md
