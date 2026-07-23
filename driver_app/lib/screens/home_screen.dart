@@ -20,6 +20,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
+  bool _hasLoadedHistory = false;
 
   @override
   void initState() {
@@ -252,7 +253,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildHistoryTab() {
     return Consumer<TripProvider>(
       builder: (context, provider, child) {
-        if (provider.tripHistory.isEmpty && !provider.isLoading) {
+        if (!_hasLoadedHistory && !provider.isLoading) {
+          _hasLoadedHistory = true;
           // Load history on first access
           WidgetsBinding.instance.addPostFrameCallback((_) {
             provider.loadTripHistory();

@@ -1,13 +1,38 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 class ApiConfig {
-  // Backend URL - Update this before building for production
-  // For development: Use your local or preview URL
-  // For production: Update to your production domain
-  // 
-  // Build with custom URL: flutter build apk --dart-define=API_BASE_URL=https://your-domain.com/api
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://10.214.194.234:8001/api'
-  );
+  static String _customBaseUrl = '';
+
+  static Future<void> init() async {
+    try {
+      const storage = FlutterSecureStorage();
+      _customBaseUrl = await storage.read(key: 'custom_api_base_url') ?? '';
+    } catch (_) {
+      // Handle error gracefully during early initialization
+    }
+  }
+
+  static Future<void> setCustomBaseUrl(String url) async {
+    _customBaseUrl = url;
+    try {
+      const storage = FlutterSecureStorage();
+      if (url.isEmpty) {
+        await storage.delete(key: 'custom_api_base_url');
+      } else {
+        await storage.write(key: 'custom_api_base_url', value: url);
+      }
+    } catch (_) {}
+  }
+
+  static String get baseUrl {
+    if (_customBaseUrl.isNotEmpty) {
+      return _customBaseUrl;
+    }
+    return const String.fromEnvironment(
+      'API_BASE_URL',
+      defaultValue: 'http://172.20.10.3:8001/api'
+    );
+  }
   
   // API Endpoints
   static const String sendOtp = '/driver/auth/send-otp';

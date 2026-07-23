@@ -21,6 +21,7 @@ class ApiService {
   static String? _token;
 
   static Future<void> init() async {
+    await ApiConfig.init();
     _token = await _storage.read(key: 'driver_token');
   }
 
