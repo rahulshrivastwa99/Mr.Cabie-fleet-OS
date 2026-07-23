@@ -66,7 +66,7 @@ const DriverManagement = () => {
   const handleStatusUpdate = async () => {
     if (!selectedDriver) return;
     try {
-      await axios.patch(`${API_BASE}/admin/drivers/${selectedDriver.id}/status`, statusData);
+      await axios.patch(`${API_BASE}/drivers/${selectedDriver.id}/status`, statusData);
       toast.success(`Driver status updated to ${statusData.status}`);
       setShowStatusModal(false);
       setSelectedDriver(null);
