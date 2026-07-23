@@ -11,12 +11,23 @@ has been split into:
 
 To use this refactored version, rename this file to server.py
 """
+import sys
+import os
+
+# Auto-re-execute using virtual environment (venv) if run globally
+if sys.prefix == sys.base_prefix:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    venv_python_win = os.path.join(base_dir, "venv", "Scripts", "python.exe")
+    venv_python_unix = os.path.join(base_dir, "venv", "bin", "python")
+    venv_python = venv_python_win if os.path.exists(venv_python_win) else venv_python_unix
+    if os.path.exists(venv_python):
+        os.execv(venv_python, [venv_python] + sys.argv)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
-import os
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -100,4 +111,4 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run("server:app", host="0.0.0.0", port=8001, reload=True)
